@@ -4,7 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Zomato Notes</title>
-    <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
     <header id="top-nav">
@@ -39,6 +42,10 @@
                                 <input id="note-tag" name="tag" />
                             </div>
                             <div class="form-group">
+                                <label for="note-attachment"><span class="attach-icon">📎</span> Attach files</label>
+                                <input id="note-attachment" name="attachment" type="file" accept="image/*,application/pdf" />
+                            </div>
+                            <div class="form-group">
                                 <label for="note-owner">Owner ID</label>
                                 <input id="note-owner" name="owner_id" type="number" value="1" min="1" required />
                             </div>
@@ -64,22 +71,40 @@
                             <button id="smart-search-btn" type="button">Search AI</button>
                         </div>
                         <div id="smart-results"></div>
-                    </section>
+                        <button id="reset-filters-btn" type="button" class="secondary">Reset all filters</button>
+                        </section>
                 </div>
             </div>
             <section class="panel" id="quick-tags-panel">
                 <h2>Quick Tag Jump</h2>
                 <div class="button-row">
-                    <button class="quick-tag-btn" data-tag="work">work</button>
-                    <button class="quick-tag-btn" data-tag="health">health</button>
-                    <button class="quick-tag-btn" data-tag="recipes">recipes</button>
-                    <button class="quick-tag-btn" data-tag="travel">travel</button>
-                    <button class="quick-tag-btn" data-tag="random">random</button>
+                    <button type="button" class="quick-tag-btn" data-tag="work">work</button>
+                    <button type="button" class="quick-tag-btn" data-tag="health">health</button>
+                    <button type="button" class="quick-tag-btn" data-tag="recipes">recipes</button>
+                    <button type="button" class="quick-tag-btn" data-tag="travel">travel</button>
+                    <button type="button" class="quick-tag-btn" data-tag="random">random</button>
                 </div>
                 <div id="quick-find-result"></div>
             </section>
             <section class="panel" id="notes">
                 <h2>Notes</h2>
+                <div class="control-row" id="notes-controls">
+                    <div class="form-group">
+                        <label for="notes-tag-filter">Filter by tag</label>
+                        <select id="notes-tag-filter">
+                            <option value="">All tags</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="notes-sort-order">Sort by</label>
+                        <select id="notes-sort-order">
+                            <option value="created_desc">Newest first</option>
+                            <option value="created_asc">Oldest first</option>
+                            <option value="title_asc">Title A → Z</option>
+                            <option value="title_desc">Title Z → A</option>
+                        </select>
+                    </div>
+                </div>
                 <div id="notes-list"></div>
             </section>
         </section>

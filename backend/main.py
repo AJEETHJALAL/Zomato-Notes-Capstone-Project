@@ -7,10 +7,17 @@ from datetime import datetime
 from fastapi import FastAPI, Depends, HTTPException, Header, BackgroundTasks, UploadFile, File, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError
 from . import crud, models, schemas, ai_service, semantic_search
 from .database import Base, engine, get_db
 from sqlalchemy.orm import Session
+import pathlib
+
+# ensure uploads directory exists
+BASE_DIR = pathlib.Path(__file__).parent
+UPLOADS_DIR = BASE_DIR / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -30,6 +37,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# mount attachments static directory
+app.mount("/attachments", StaticFiles(directory=str(UPLOADS_DIR)), name="attachments")
 
 
 class ProcessTimeMiddleware:
@@ -194,7 +203,11 @@ def smart_search(q: str, db: Session = Depends(get_db)):
     notes = [note_to_dict(note) for note in crud.get_notes(db, tag="ai-demo")]
     if not notes:
         return []
-    ranked = semantic_search.rank_notes_by_similarity(notes, q)
+    try:
+        ranked = semantic_search.rank_notes_by_similarity(notes, q)
+    except Exception as exc:
+        logging.error("Smart search failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Smart search unavailable")
     return ranked[:3]
 
 
@@ -222,3 +235,22 @@ def delete_note(note_id: int, db: Session = Depends(get_db), _auth: None = Depen
         raise HTTPException(status_code=404, detail="Note not found")
     crud.delete_note(db, note_id)
     return JSONResponse(content={"detail": "Note deleted"})
+
+
+@app.post("/notes/{note_id:int}/attachment")
+async def upload_attachment(note_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    note = crud.get_note(db, note_id)
+    if note is None:
+        raise HTTPException(status_code=404, detail="Note not found")
+    # sanitize filename
+    filename = os.path.basename(file.filename)
+    # prefix with note id and timestamp to avoid clashes
+    ts = int(time.time())
+    dest_name = f"{note_id}_{ts}_{filename}"
+    dest_path = UPLOADS_DIR / dest_name
+    contents = await file.read()
+    with open(dest_path, "wb") as f:
+        f.write(contents)
+    # return URL to attachments mount
+    url = f"/attachments/{dest_name}"
+    return {"filename": dest_name, "url": url}
