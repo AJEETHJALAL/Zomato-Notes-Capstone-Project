@@ -198,7 +198,7 @@ def smart_search(q: str, db: Session = Depends(get_db)):
     return ranked[:3]
 
 
-@app.get("/notes/{note_id}", response_model=schemas.NoteOut)
+@app.get("/notes/{note_id:int}", response_model=schemas.NoteOut)
 def get_note(note_id: int, db: Session = Depends(get_db)):
     note = crud.get_note(db, note_id)
     if note is None:
@@ -206,7 +206,7 @@ def get_note(note_id: int, db: Session = Depends(get_db)):
     return note_to_dict(note)
 
 
-@app.put("/notes/{note_id}", response_model=schemas.NoteOut)
+@app.put("/notes/{note_id:int}", response_model=schemas.NoteOut)
 def update_note(note_id: int, note_update: schemas.NoteUpdate, db: Session = Depends(get_db)):
     db_note = crud.get_note(db, note_id)
     if db_note is None:
@@ -215,7 +215,7 @@ def update_note(note_id: int, note_update: schemas.NoteUpdate, db: Session = Dep
     return note_to_dict(updated)
 
 
-@app.delete("/notes/{note_id}")
+@app.delete("/notes/{note_id:int}")
 def delete_note(note_id: int, db: Session = Depends(get_db), _auth: None = Depends(auth_gate)):
     db_note = crud.get_note(db, note_id)
     if db_note is None:
