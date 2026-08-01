@@ -1,0 +1,5 @@
+Daily team sync
+Customer incident root cause investigation
+Deploy rollback plan
+Postmortem draft outline
+Follow up with database team

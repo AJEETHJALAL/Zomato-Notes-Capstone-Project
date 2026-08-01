@@ -1,0 +1,224 @@
+import os
+import time
+import json
+import logging
+from typing import List, Optional
+from datetime import datetime
+from fastapi import FastAPI, Depends, HTTPException, Header, BackgroundTasks, UploadFile, File, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
+from . import crud, models, schemas, ai_service, semantic_search
+from .database import Base, engine, get_db
+from sqlalchemy.orm import Session
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+Base.metadata.create_all(bind=engine)
+
+DELETE_TOKEN = os.getenv("DELETE_TOKEN", "zomato-secret-token")
+FRONTEND_ORIGINS = [
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+]
+
+app = FastAPI(title="Zomato Notes API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=FRONTEND_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class ProcessTimeMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        start = time.time()
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                process_time = time.time() - start
+                headers = message.setdefault("headers", [])
+                headers.append((b"x-process-time", str(process_time).encode()))
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+
+app.add_middleware(ProcessTimeMiddleware)
+
+
+async def auth_gate(x_token: Optional[str] = Header(None)) -> None:
+    if x_token is None:
+        raise HTTPException(status_code=401, detail="Missing x-token header")
+    if x_token != DELETE_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid x-token")
+
+
+def simulate_indexing(note_id: int) -> None:
+    time.sleep(2)
+    logging.info(f"Indexed note {note_id} in background")
+
+
+def note_to_dict(note: models.Note) -> dict:
+    return {
+        "id": note.id,
+        "title": note.title,
+        "content": note.content,
+        "tag": note.tag or "",
+        "owner_id": note.owner_id,
+        "created_at": note.created_at.isoformat(),
+    }
+
+
+@app.post("/users", response_model=schemas.UserOut)
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    try:
+        db_user = crud.create_user(db, user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="A user with that email already exists")
+    return db_user
+
+
+@app.post("/notes", response_model=schemas.NoteCreateResponse)
+def create_note(
+    note: schemas.NoteCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    owner = crud.get_user(db, note.owner_id)
+    if owner is None:
+        raise HTTPException(status_code=404, detail="Owner not found")
+    db_note = crud.create_note(db, note)
+    ai_suggestion = None
+    try:
+        raw_response = ai_service.get_ai_response(db_note.content, ai_service.AI_PROMPT_TEMPLATE)
+        parsed = json.loads(raw_response)
+        ai_suggestion = schemas.AISuggestion(**parsed)
+    except Exception as exc:
+        logging.warning("AI suggestion parse failed: %s", exc)
+        logging.warning("Raw AI response: %s", raw_response if 'raw_response' in locals() else "<none>")
+        ai_suggestion = None
+    background_tasks.add_task(simulate_indexing, db_note.id)
+    return {**note_to_dict(db_note), "ai_suggestion": ai_suggestion}
+
+
+@app.get("/notes", response_model=List[schemas.NoteOut])
+def list_notes(tag: Optional[str] = None, db: Session = Depends(get_db)):
+    notes = crud.get_notes(db, tag=tag)
+    return [note_to_dict(note) for note in notes]
+
+
+@app.post("/notes/import")
+def import_notes(owner_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    owner = crud.get_user(db, owner_id)
+    if owner is None:
+        raise HTTPException(status_code=404, detail="Owner not found")
+    contents = file.file.read().decode("utf-8")
+    lines = [line.strip() for line in contents.splitlines() if line.strip()]
+    created = []
+    for line in lines:
+        note_in = schemas.NoteCreate(title=line[:120], content=line, tag="", owner_id=owner_id)
+        note = crud.create_note(db, note_in)
+        created.append(note_to_dict(note))
+    return {"imported": len(created), "notes": created}
+
+
+@app.get("/reports/tag-summary")
+def tag_summary(db: Session = Depends(get_db)):
+    return crud.raw_tag_summary(db)
+
+
+@app.get("/reports/long-notes")
+def long_notes(db: Session = Depends(get_db)):
+    return crud.raw_long_notes(db)
+
+
+@app.get("/reports/user-notes")
+def user_notes(db: Session = Depends(get_db)):
+    return crud.raw_user_notes(db)
+
+
+@app.get("/notes/search")
+def note_search(keyword: Optional[str] = None, sort_by: Optional[str] = None, db: Session = Depends(get_db)):
+    notes = [note_to_dict(note) for note in crud.get_notes(db)]
+    if sort_by == "date":
+        for note in notes:
+            dt = datetime.fromisoformat(note["created_at"])
+            note["created_at_epoch"] = int(dt.timestamp())
+        from .algorithms import insertion_sort_by_key
+        return insertion_sort_by_key(notes, key="created_at_epoch")[:5]
+    if keyword:
+        keyword_lower = keyword.lower()
+        for note in notes:
+            note["score"] = note["content"].lower().count(keyword_lower)
+        from .algorithms import insertion_sort_by_key
+        return insertion_sort_by_key(notes, key="score")[:5]
+    raise HTTPException(status_code=400, detail="keyword or sort_by=date required")
+
+
+@app.get("/notes/lookup")
+def lookup_note(title: str, algo: str = "iterative", db: Session = Depends(get_db)):
+    notes = crud.get_notes_ordered_by_title(db)
+    titles = [note.title for note in notes]
+    from .algorithms import binary_search_iterative, binary_search_recursive
+    if algo == "iterative":
+        index = binary_search_iterative(titles, title)
+    else:
+        index = binary_search_recursive(titles, title, 0, len(titles) - 1)
+    if index == -1:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return note_to_dict(notes[index])
+
+
+@app.get("/notes/quick-find")
+def quick_find(tag: str, db: Session = Depends(get_db)):
+    notes = [note_to_dict(note) for note in crud.get_notes(db)]
+    from .algorithms import linear_search
+    found = linear_search(notes, key="tag", value=tag)
+    if not found:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return found
+
+
+@app.get("/notes/smart-search")
+def smart_search(q: str, db: Session = Depends(get_db)):
+    notes = [note_to_dict(note) for note in crud.get_notes(db, tag="ai-demo")]
+    if not notes:
+        return []
+    ranked = semantic_search.rank_notes_by_similarity(notes, q)
+    return ranked[:3]
+
+
+@app.get("/notes/{note_id}", response_model=schemas.NoteOut)
+def get_note(note_id: int, db: Session = Depends(get_db)):
+    note = crud.get_note(db, note_id)
+    if note is None:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return note_to_dict(note)
+
+
+@app.put("/notes/{note_id}", response_model=schemas.NoteOut)
+def update_note(note_id: int, note_update: schemas.NoteUpdate, db: Session = Depends(get_db)):
+    db_note = crud.get_note(db, note_id)
+    if db_note is None:
+        raise HTTPException(status_code=404, detail="Note not found")
+    updated = crud.update_note(db, db_note, note_update)
+    return note_to_dict(updated)
+
+
+@app.delete("/notes/{note_id}")
+def delete_note(note_id: int, db: Session = Depends(get_db), _auth: None = Depends(auth_gate)):
+    db_note = crud.get_note(db, note_id)
+    if db_note is None:
+        raise HTTPException(status_code=404, detail="Note not found")
+    crud.delete_note(db, note_id)
+    return JSONResponse(content={"detail": "Note deleted"})

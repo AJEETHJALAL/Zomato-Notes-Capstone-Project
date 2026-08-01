@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zomato Notes</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <header id="top-nav">
+        <div class="brand">Zomato Notes</div>
+        <nav>
+            <a href="#notes">Notes</a>
+            <a href="#add-note">Add Note</a>
+            <a href="#category-tree">Tags</a>
+        </nav>
+    </header>
+    <main>
+        <section class="sidebar" id="category-tree">
+            <h2>Tag Tree</h2>
+            <div id="tree-root"></div>
+        </section>
+        <section class="content">
+            <section class="panel" id="add-note">
+                <h2>Add Note</h2>
+                <form id="note-form">
+                    <div class="form-group">
+                        <label for="note-title">Title</label>
+                        <input id="note-title" name="title" required maxlength="120" />
+                    </div>
+                    <div class="form-group">
+                        <label for="note-content">Content</label>
+                        <textarea id="note-content" name="content" required rows="4"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="note-tag">Tag</label>
+                        <input id="note-tag" name="tag" />
+                    </div>
+                    <div class="form-group">
+                        <label for="note-owner">Owner ID</label>
+                        <input id="note-owner" name="owner_id" type="number" value="1" min="1" required />
+                    </div>
+                    <div id="form-error" class="error"></div>
+                    <button type="submit">Create note</button>
+                </form>
+            </section>
+            <section class="panel" id="search-panel">
+                <h2>Search</h2>
+                <div class="control-row">
+                    <label for="plain-search">Filter notes by title or tag</label>
+                    <input id="plain-search" type="search" placeholder="Search notes..." />
+                </div>
+                <div id="loading-message" class="info">Loading notes…</div>
+                <div id="error-message" class="error"></div>
+            </section>
+            <section class="panel" id="ranking-panel">
+                <h2>Ranked Search</h2>
+                <div class="control-row">
+                    <input id="rank-keyword" type="text" placeholder="Keyword for relevance search" />
+                    <select id="rank-mode">
+                        <option value="relevance">Relevance</option>
+                        <option value="date">Date</option>
+                    </select>
+                    <button id="rank-search-btn" type="button">Search</button>
+                </div>
+                <div id="rank-results"></div>
+            </section>
+            <section class="panel" id="lookup-panel">
+                <h2>Jump to exact title</h2>
+                <div class="control-row">
+                    <input id="lookup-title" type="text" placeholder="Exact title" />
+                    <select id="lookup-algo">
+                        <option value="iterative">Iterative</option>
+                        <option value="recursive">Recursive</option>
+                    </select>
+                    <button id="lookup-btn" type="button">Lookup</button>
+                </div>
+                <div id="lookup-result"></div>
+            </section>
+            <section class="panel" id="smart-search-panel">
+                <h2>Smart Search (AI)</h2>
+                <div class="control-row">
+                    <input id="smart-search-query" type="text" placeholder="Semantic query" />
+                    <button id="smart-search-btn" type="button">Search AI</button>
+                </div>
+                <div id="smart-results"></div>
+            </section>
+            <section class="panel" id="quick-tags-panel">
+                <h2>Quick Tag Jump</h2>
+                <div class="button-row">
+                    <button class="quick-tag-btn" data-tag="work">work</button>
+                    <button class="quick-tag-btn" data-tag="health">health</button>
+                    <button class="quick-tag-btn" data-tag="recipes">recipes</button>
+                    <button class="quick-tag-btn" data-tag="travel">travel</button>
+                    <button class="quick-tag-btn" data-tag="random">random</button>
+                </div>
+                <div id="quick-find-result"></div>
+            </section>
+            <section class="panel" id="notes">
+                <h2>Notes</h2>
+                <div id="notes-list"></div>
+            </section>
+        </section>
+    </main>
+    <footer>
+        <p>Built for Zomato Notes capstone.</p>
+    </footer>
+    <script src="mock-data.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
