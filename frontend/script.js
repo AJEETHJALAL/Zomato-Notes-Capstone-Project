@@ -374,9 +374,12 @@ function attachListeners() {
     }
   });
 
-  document.getElementById("rank-search-btn").addEventListener("click", performRankSearch);
-  document.getElementById("lookup-btn").addEventListener("click", performLookup);
-  document.getElementById("smart-search-btn").addEventListener("click", performSmartSearch);
+  const rankBtn = document.getElementById("rank-search-btn");
+  if (rankBtn) rankBtn.addEventListener("click", performRankSearch);
+  const lookupBtn = document.getElementById("lookup-btn");
+  if (lookupBtn) lookupBtn.addEventListener("click", performLookup);
+  const smartBtn = document.getElementById("smart-search-btn");
+  if (smartBtn) smartBtn.addEventListener("click", performSmartSearch);
   document.querySelectorAll(".quick-tag-btn").forEach((button) => {
     button.addEventListener("click", () => performQuickTagJump(button.dataset.tag));
   });
