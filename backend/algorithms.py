@@ -45,7 +45,12 @@ def binary_search_recursive(sorted_titles: List[str], target: str, start: int, e
 def linear_search(items: List[Dict[str, Any]], key: str, value: Any) -> Optional[Dict[str, Any]]:
     found = None
     for item in items:
-        if item.get(key) == value:
+        item_value = item.get(key)
+        if isinstance(item_value, str) and isinstance(value, str):
+            if item_value.lower() == value.lower():
+                found = item
+                break
+        elif item_value == value:
             found = item
             break
     return found

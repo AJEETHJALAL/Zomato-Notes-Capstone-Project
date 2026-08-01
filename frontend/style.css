@@ -4,41 +4,67 @@
 
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
-  background: #f3f3f3;
-  color: #222;
+  font-family: 'Poppins', system-ui, sans-serif;
+  background: radial-gradient(circle at top left, #fff1f0 0%, #f9e3e1 40%, #f5e1e0 100%);
+  color: #2f1212;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Poppins', system-ui, sans-serif;
+}
+
+h2 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #7a1111;
+  letter-spacing: -0.02em;
 }
 
 #top-nav {
   position: sticky;
   top: 0;
-  background: #2d2f33;
+  background: #8a0d0d;
   color: #fff;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 2px solid #ff5a00;
+  padding: 1.5rem 2rem;
+  border-bottom: 4px solid #ff4e4e;
+  box-shadow: 0 6px 20px rgba(138, 13, 13, 0.18);
   z-index: 10;
 }
 
 #top-nav nav a {
-  color: #fff;
-  margin-left: 1rem;
+  color: #ffe3e3;
+  margin-left: 1.5rem;
   text-decoration: none;
+  font-weight: 500;
+}
+
+#top-nav nav a:hover {
+  color: #fff;
+}
+
+#top-nav .brand {
+  font-size: 4rem;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.05em;
 }
 
 main {
   display: grid;
-  grid-template-columns: 240px 1fr;
-  gap: 1rem;
-  padding: 1rem;
+  grid-template-columns: 260px 1fr;
+  gap: 1.25rem;
+  padding: 1.5rem;
 }
 
 .sidebar {
-  background: #fff;
-  border: 1px solid #ddd;
-  padding: 1rem;
+  background: rgba(255, 236, 236, 0.95);
+  border: 1px solid rgba(255, 82, 82, 0.35);
+  padding: 1.2rem;
+  border-radius: 20px;
+  box-shadow: 0 10px 35px rgba(148, 32, 32, 0.1);
 }
 
 .content {
@@ -49,13 +75,12 @@ main {
 /* Two-column layout inside content: left for Add Note, right for Search panels */
 .two-column {
   display: grid;
-  grid-template-columns: 0.62fr 0.38fr; /* left column slightly wider */
+  grid-template-columns: 0.6fr 0.4fr; /* left column slightly wider */
   gap: 1rem;
   align-items: start;
 }
 
 .left-col {
-  /* keep Add Note readable while slightly reduced */
 }
 
 .right-col {
@@ -65,9 +90,11 @@ main {
 }
 
 .panel {
-  background: #fff;
-  border: 1px solid #ddd;
-  padding: 1rem;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(197, 44, 44, 0.25);
+  padding: 1.25rem;
+  border-radius: 20px;
+  box-shadow: 0 10px 24px rgba(185, 12, 12, 0.08);
 }
 
 .control-row,
@@ -76,7 +103,7 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.85rem;
 }
 
 .control-row input,
@@ -84,34 +111,136 @@ main {
 .form-group input,
 .form-group textarea {
   flex: 1 1 180px;
-  padding: 0.6rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding: 0.85rem 1rem;
+  border: 1px solid #d3a0a0;
+  border-radius: 14px;
+  background: #fff5f4;
+  color: #3f1212;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-button {
-  background: #ff5a00;
-  border: none;
-  color: white;
-  padding: 0.75rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
+.control-row input:focus,
+.control-row select:focus,
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #d24a4a;
+  box-shadow: 0 0 0 4px rgba(255, 157, 157, 0.18);
 }
 
-button:hover {
-  background: #dd4c00;
+#notes-controls {
+  align-items: center;
+}
+
+#notes-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: end;
+}
+
+#notes-controls .form-group {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#notes-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
 }
 
 .note-card {
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  padding: 1rem;
+  margin-bottom: 0;
+}
+
+button {
+  background: linear-gradient(135deg, #d52f2f 0%, #ff4b4b 100%);
+  border: 1px solid #d52f2f;
+  color: white;
+  padding: 0.85rem 1.15rem;
+  border-radius: 999px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(213, 47, 47, 0.18);
+}
+
+button.secondary {
+  background: #7f3a3a;
+  border-color: #7f3a3a;
+}
+
+button.secondary:hover {
+  background: #5f2d2d;
+  border-color: #5f2d2d;
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+label {
+  color: #581010;
+  font-weight: 600;
+}
+
+.panel {
+  position: relative;
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  left: 1.25rem;
+  top: 1.25rem;
+  width: 36px;
+  height: 4px;
+  background: linear-gradient(135deg, #ff7a7a, #c70909);
+  border-radius: 999px;
+  opacity: 0.8;
+}
+
+.panel h2 {
+  margin-top: 0;
   margin-bottom: 1rem;
-  background: #fff;
+}
+
+.attach-icon {
+  margin-right: 0.35rem;
+}
+
+.edit-fields {
+  margin-top: 1rem;
+  padding: 0.8rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #f9f9f9;
+}
+
+.edit-fields .form-group {
+  margin-bottom: 0.65rem;
+}
+
+.note-card {
+  border: 1px solid rgba(209, 94, 94, 0.35);
+  border-radius: 24px;
+  padding: 1.2rem;
+  background: #fff7f6;
+  box-shadow: 0 16px 30px rgba(208, 77, 77, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
 }
 
 .note-card h3 {
   margin-top: 0;
+  color: #8a0d0d;
+  font-size: 1.35rem;
 }
 
 .note-card p {
@@ -119,12 +248,16 @@ button:hover {
 }
 
 .note-card .tag {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   margin-right: 0.5rem;
-  padding: 0.2rem 0.5rem;
-  background: #ffeed8;
-  border-radius: 4px;
-  color: #8a4b00;
+  padding: 0.3rem 0.75rem;
+  background: #ffe5e5;
+  border-radius: 999px;
+  color: #8a1c1c;
+  font-weight: 600;
+  font-size: 0.95rem;
 }
 
 .note-card .tag span {
@@ -184,6 +317,19 @@ button:hover {
   display: block;
 }
 
+.attachment-link,
+.attachment-download {
+  display: inline-block;
+  margin-top: 0.5rem;
+  color: #ff5a00;
+  text-decoration: none;
+}
+
+.attachment-link:hover,
+.attachment-download:hover {
+  text-decoration: underline;
+}
+
 #tree-root li::before {
   content: "▶";
   display: inline-block;
@@ -196,7 +342,7 @@ button:hover {
   transform: rotate(90deg);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 860px) {
   main {
     grid-template-columns: 1fr;
   }
@@ -206,7 +352,21 @@ button:hover {
     align-items: flex-start;
   }
 
+  .brand {
+    font-size: 2.5rem;
+  }
+
   .two-column {
+    grid-template-columns: 1fr;
+  }
+
+  #notes-list {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 580px) {
+  #notes-list {
     grid-template-columns: 1fr;
   }
 }

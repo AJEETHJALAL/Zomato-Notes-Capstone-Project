@@ -17,12 +17,15 @@ const CATEGORY_TREE = {
   ],
 };
 
+
 let allNotes = [];
 let debounceTimer = null;
+
 
 if (typeof USE_MOCK === "undefined") {
   window.USE_MOCK = false;
 }
+
 
 async function fetchNotes(tag = "") {
   if (window.USE_MOCK) {
@@ -39,6 +42,7 @@ async function fetchNotes(tag = "") {
   return response.json();
 }
 
+
 async function createNote(payload) {
   if (window.USE_MOCK) {
     const note = { ...payload, id: Date.now(), created_at: new Date().toISOString() };
@@ -54,8 +58,25 @@ async function createNote(payload) {
     const errorText = await response.text();
     throw new Error(`Create failed: ${response.status} ${errorText}`);
   }
-  return response.json();
+  const created = await response.json();
+
+  // if user attached a file, upload it to the backend and attach URL to note
+  try {
+    const fileInput = document.getElementById("note-attachment");
+    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+      const file = fileInput.files[0];
+      const attachRes = await uploadAttachment(created.id, file);
+      if (attachRes && attachRes.url) {
+        created.attachment_url = attachRes.url;
+      }
+    }
+  } catch (err) {
+    console.warn("Attachment upload failed:", err);
+  }
+
+  return created;
 }
+
 
 async function deleteNote(id) {
   if (window.USE_MOCK) {
@@ -74,6 +95,7 @@ async function deleteNote(id) {
   }
 }
 
+
 function renderNotes(notes) {
   const list = document.getElementById("notes-list");
   list.innerHTML = "";
@@ -86,43 +108,178 @@ function renderNotes(notes) {
   });
 }
 
+
 function createNoteCard(note) {
   const card = document.createElement("article");
   card.className = "note-card";
   card.dataset.noteId = note.id;
 
+
   const title = document.createElement("h3");
   title.textContent = note.title;
   card.appendChild(title);
+
 
   const content = document.createElement("p");
   content.textContent = note.content;
   card.appendChild(content);
 
+
   const tagLine = document.createElement("p");
   tagLine.innerHTML = `<span class="tag">Tag:</span> ${note.tag || "(none)"}`;
   card.appendChild(tagLine);
+
+  // show attachment paperclip if available
+  if (note.attachment_url) {
+    const attachLink = document.createElement("a");
+    attachLink.href = note.attachment_url;
+    attachLink.target = "_blank";
+    attachLink.rel = "noopener noreferrer";
+    attachLink.className = "attachment-link";
+    attachLink.title = "View attachment";
+    attachLink.innerHTML = `📎 View attachment`;
+    card.appendChild(attachLink);
+  }
+
 
   const ownerInfo = document.createElement("p");
   ownerInfo.textContent = `Owner ID: ${note.owner_id}`;
   card.appendChild(ownerInfo);
 
+
+  const editFields = document.createElement("div");
+  editFields.className = "edit-fields";
+  editFields.style.display = "none";
+
+  const titleEditGroup = document.createElement("div");
+  titleEditGroup.className = "form-group";
+  const titleEditLabel = document.createElement("label");
+  titleEditLabel.textContent = "Title";
+  const titleInput = document.createElement("input");
+  titleInput.type = "text";
+  titleInput.value = note.title;
+  titleInput.required = true;
+  titleEditGroup.appendChild(titleEditLabel);
+  titleEditGroup.appendChild(titleInput);
+
+  const contentEditGroup = document.createElement("div");
+  contentEditGroup.className = "form-group";
+  const contentEditLabel = document.createElement("label");
+  contentEditLabel.textContent = "Content";
+  const contentInput = document.createElement("textarea");
+  contentInput.rows = 4;
+  contentInput.value = note.content;
+  contentInput.required = true;
+  contentEditGroup.appendChild(contentEditLabel);
+  contentEditGroup.appendChild(contentInput);
+
+  const tagEditGroup = document.createElement("div");
+  tagEditGroup.className = "form-group";
+  const tagEditLabel = document.createElement("label");
+  tagEditLabel.textContent = "Tag";
+  const tagInput = document.createElement("input");
+  tagInput.type = "text";
+  tagInput.value = note.tag || "";
+  tagEditGroup.appendChild(tagEditLabel);
+  tagEditGroup.appendChild(tagInput);
+
+  editFields.appendChild(titleEditGroup);
+  editFields.appendChild(contentEditGroup);
+  editFields.appendChild(tagEditGroup);
+  card.appendChild(editFields);
+
   const controls = document.createElement("div");
   controls.className = "card-controls";
+  const editButton = document.createElement("button");
+  editButton.type = "button";
+  editButton.textContent = "Edit";
+  const saveButton = document.createElement("button");
+  saveButton.type = "button";
+  saveButton.textContent = "Save";
+  saveButton.style.display = "none";
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.style.display = "none";
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
   deleteButton.textContent = "Delete";
+
+  const enterEditMode = () => {
+    title.style.display = "none";
+    content.style.display = "none";
+    tagLine.style.display = "none";
+    editFields.style.display = "block";
+    editButton.style.display = "none";
+    saveButton.style.display = "inline-block";
+    cancelButton.style.display = "inline-block";
+  };
+
+  const exitEditMode = () => {
+    title.style.display = "block";
+    content.style.display = "block";
+    tagLine.style.display = "block";
+    editFields.style.display = "none";
+    editButton.style.display = "inline-block";
+    saveButton.style.display = "none";
+    cancelButton.style.display = "none";
+  };
+
+  editButton.addEventListener("click", () => {
+    enterEditMode();
+  });
+
+  saveButton.addEventListener("click", async () => {
+    try {
+      saveButton.disabled = true;
+      cancelButton.disabled = true;
+      const updated = await updateNote(note.id, {
+        title: titleInput.value.trim(),
+        content: contentInput.value.trim(),
+        tag: tagInput.value.trim(),
+      });
+      note.title = updated.title;
+      note.content = updated.content;
+      note.tag = updated.tag;
+      title.textContent = updated.title;
+      content.textContent = updated.content;
+      tagLine.innerHTML = `<span class="tag">Tag:</span> ${updated.tag || "(none)"}`;
+      allNotes = allNotes.map((item) => (item.id === updated.id ? updated : item));
+      updateTagFilterOptions();
+      updateNotesDisplay();
+      exitEditMode();
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      saveButton.disabled = false;
+      cancelButton.disabled = false;
+    }
+  });
+
+  cancelButton.addEventListener("click", () => {
+    titleInput.value = note.title;
+    contentInput.value = note.content;
+    tagInput.value = note.tag || "";
+    exitEditMode();
+  });
+
   deleteButton.addEventListener("click", async () => {
     try {
       deleteButton.disabled = true;
       await deleteNote(note.id);
       card.remove();
       allNotes = allNotes.filter((item) => item.id !== note.id);
+      updateTagFilterOptions();
+      updateNotesDisplay();
     } catch (err) {
       showError(err.message);
       deleteButton.disabled = false;
     }
   });
+
+  controls.appendChild(editButton);
+  controls.appendChild(saveButton);
+  controls.appendChild(cancelButton);
   controls.appendChild(deleteButton);
 
   if (note.ai_suggestion) {
@@ -135,6 +292,8 @@ function createNoteCard(note) {
         await updateNoteTag(note.id, note.ai_suggestion.tags[0]);
         note.tag = note.ai_suggestion.tags[0];
         tagLine.innerHTML = `<span class="tag">Tag:</span> ${note.tag}`;
+        updateTagFilterOptions();
+        updateNotesDisplay();
       } catch (err) {
         showError(err.message);
       } finally {
@@ -145,6 +304,8 @@ function createNoteCard(note) {
   }
 
   card.appendChild(controls);
+
+
 
   if (note.ai_suggestion) {
     const suggestion = document.createElement("div");
@@ -157,25 +318,48 @@ function createNoteCard(note) {
     card.appendChild(suggestion);
   }
 
+
   return card;
 }
 
+
 async function updateNoteTag(id, tag) {
+  return updateNote(id, { tag });
+}
+
+async function updateNote(id, data) {
   const response = await fetch(`${BASE_API_URL}/notes/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tag }),
+    body: JSON.stringify(data),
   });
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to update tag: ${response.status} ${errorText}`);
+    throw new Error(`Failed to update note: ${response.status} ${errorText}`);
   }
   return response.json();
 }
 
+async function uploadAttachment(noteId, file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const response = await fetch(`${BASE_API_URL}/notes/${noteId}/attachment`, {
+    method: 'POST',
+    body: fd,
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Upload failed: ${response.status} ${errText}`);
+  }
+  return response.json();
+}
+
+
 function showError(message) {
   const error = document.getElementById("error-message");
-  error.textContent = message;
+  if (error) {
+    error.textContent = message;
+  }
 }
 
 function clearError() {
@@ -183,16 +367,113 @@ function clearError() {
 }
 
 function setLoading(isLoading) {
-  document.getElementById("loading-message").style.display = isLoading ? "block" : "none";
+  const loading = document.getElementById("loading-message");
+  if (loading) {
+    loading.style.display = isLoading ? "block" : "none";
+  }
+}
+
+function getDisplayedNotes() {
+  const searchTerm = document.getElementById("plain-search")?.value.trim().toLowerCase() || "";
+  const tagFilter = document.getElementById("notes-tag-filter")?.value || "";
+  const sortOrder = document.getElementById("notes-sort-order")?.value || "created_desc";
+
+  let filtered = allNotes.filter((note) => {
+    const matchesSearch =
+      !searchTerm ||
+      note.title.toLowerCase().includes(searchTerm) ||
+      note.tag.toLowerCase().includes(searchTerm) ||
+      note.content.toLowerCase().includes(searchTerm);
+    const matchesTag = !tagFilter || note.tag.toLowerCase() === tagFilter.toLowerCase();
+    return matchesSearch && matchesTag;
+  });
+
+  filtered.sort((a, b) => {
+    if (sortOrder === "created_asc") {
+      return new Date(a.created_at) - new Date(b.created_at);
+    }
+    if (sortOrder === "created_desc") {
+      return new Date(b.created_at) - new Date(a.created_at);
+    }
+    if (sortOrder === "title_asc") {
+      return a.title.localeCompare(b.title);
+    }
+    if (sortOrder === "title_desc") {
+      return b.title.localeCompare(a.title);
+    }
+    return 0;
+  });
+
+  return filtered;
+}
+
+function updateNotesDisplay() {
+  renderNotes(getDisplayedNotes());
+}
+
+function updateTagFilterOptions() {
+  const select = document.getElementById("notes-tag-filter");
+  if (!select) {
+    return;
+  }
+
+  const currentValue = select.value;
+  const tagSet = new Set();
+  allNotes.forEach((note) => {
+    if (note.tag?.trim()) {
+      tagSet.add(note.tag.trim());
+    }
+  });
+
+  select.innerHTML = "";
+  const allOption = document.createElement("option");
+  allOption.value = "";
+  allOption.textContent = "All tags";
+  select.appendChild(allOption);
+
+  Array.from(tagSet)
+    .sort((a, b) => a.localeCompare(b))
+    .forEach((tag) => {
+      const option = document.createElement("option");
+      option.value = tag;
+      option.textContent = tag;
+      select.appendChild(option);
+    });
+
+  if (currentValue && Array.from(tagSet).includes(currentValue)) {
+    select.value = currentValue;
+  }
+}
+
+function resetAllFilters() {
+  const plainSearch = document.getElementById("plain-search");
+  const notesTagFilter = document.getElementById("notes-tag-filter");
+  const notesSortOrder = document.getElementById("notes-sort-order");
+  const smartSearchQuery = document.getElementById("smart-search-query");
+  const smartResults = document.getElementById("smart-results");
+
+  if (plainSearch) {
+    plainSearch.value = "";
+  }
+  if (notesTagFilter) {
+    notesTagFilter.value = "";
+  }
+  if (notesSortOrder) {
+    notesSortOrder.value = "created_desc";
+  }
+  if (smartSearchQuery) {
+    smartSearchQuery.value = "";
+  }
+  if (smartResults) {
+    smartResults.textContent = "";
+  }
+  updateNotesDisplay();
 }
 
 function filterNotes(value) {
-  const term = value.trim().toLowerCase();
-  const filtered = allNotes.filter((note) => {
-    return note.title.toLowerCase().includes(term) || note.tag.toLowerCase().includes(term);
-  });
-  renderNotes(filtered);
+  updateNotesDisplay();
 }
+
 
 function renderTree(node) {
   const li = document.createElement("li");
@@ -204,6 +485,7 @@ function renderTree(node) {
     li.classList.toggle("open");
   });
 
+
   if (node.children && node.children.length > 0) {
     const ul = document.createElement("ul");
     node.children.forEach((child) => {
@@ -214,6 +496,7 @@ function renderTree(node) {
   return li;
 }
 
+
 function buildCategoryTree() {
   const root = document.getElementById("tree-root");
   root.innerHTML = "";
@@ -222,34 +505,75 @@ function buildCategoryTree() {
   root.appendChild(tree);
 }
 
+
 async function performRankSearch() {
   const keyword = document.getElementById("rank-keyword").value.trim();
   const mode = document.getElementById("rank-mode").value;
   const resultContainer = document.getElementById("rank-results");
   resultContainer.textContent = "";
+
+  if (mode !== "date" && !keyword) {
+    resultContainer.textContent = "Enter a keyword for relevance search.";
+    return;
+  }
+
+  let matchedNotes = [];
+
+  /* Try the backend search endpoint first. */
   try {
     let url = `${BASE_API_URL}/notes/search`;
     if (mode === "date") {
       url += "?sort_by=date";
     } else {
-      if (!keyword) {
-        resultContainer.textContent = "Enter a keyword for relevance search.";
-        return;
-      }
       url += `?keyword=${encodeURIComponent(keyword)}`;
     }
     const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Search failed: ${response.status}`);
+    if (response.ok) {
+      matchedNotes = await response.json();
     }
-    const results = await response.json();
-    resultContainer.innerHTML = results.length
-      ? results.map((note) => `<div><strong>${note.title}</strong> (${note.tag})</div>`).join("")
-      : "No ranked results.";
   } catch (err) {
-    resultContainer.textContent = err.message;
+    /* Backend not available — fall through to client-side logic. */
   }
+
+  /* Client-side fallback. */
+  if (matchedNotes.length === 0) {
+    if (allNotes.length === 0) {
+      resultContainer.textContent = "No notes loaded to search.";
+      renderNotes([]);
+      return;
+    }
+
+    if (mode === "date") {
+      /* Sort by created_at descending. */
+      matchedNotes = [...allNotes].sort(
+        (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+      );
+    } else {
+      /* Relevance: filter by keyword in title, content, or tag. */
+      const term = keyword.toLowerCase();
+      matchedNotes = allNotes.filter((note) =>
+        (note.title || "").toLowerCase().includes(term) ||
+        (note.content || "").toLowerCase().includes(term) ||
+        (note.tag || "").toLowerCase().includes(term)
+      );
+    }
+  }
+
+  if (matchedNotes.length === 0) {
+    resultContainer.textContent = "No ranked results.";
+    renderNotes([]);
+    return;
+  }
+
+  /* Render matched notes as cards in the notes list (same as filterNotes). */
+  renderNotes(matchedNotes);
+
+  /* Also show a text summary in the rank-results panel. */
+  resultContainer.innerHTML = matchedNotes
+    .map((note) => `<div><strong>${note.title}</strong> (${note.tag || "none"})</div>`)
+    .join("");
 }
+
 
 async function performLookup() {
   const title = document.getElementById("lookup-title").value.trim();
@@ -260,62 +584,156 @@ async function performLookup() {
     resultContainer.textContent = "Enter an exact title.";
     return;
   }
+
+  let foundNote = null;
+
+  /* Try the backend lookup endpoint first. */
   try {
     const response = await fetch(
       `${BASE_API_URL}/notes/lookup?title=${encodeURIComponent(title)}&algo=${encodeURIComponent(algo)}`
     );
-    if (!response.ok) {
-      throw new Error(`Lookup failed: ${response.status}`);
+    if (response.ok) {
+      const note = await response.json();
+      if (note && note.id !== undefined) {
+        foundNote = note;
+      }
     }
-    const note = await response.json();
-    resultContainer.innerHTML = `<strong>Found:</strong> ${note.title} <span class="tag">${note.tag}</span>`;
-    highlightNote(note.id);
   } catch (err) {
-    resultContainer.textContent = err.message;
+    /* Backend not available — fall through to client-side lookup. */
   }
+
+  /* Client-side fallback: find first note with matching title (case-insensitive exact match). */
+  if (!foundNote) {
+    if (allNotes.length === 0) {
+      resultContainer.textContent = "No notes loaded to search.";
+      renderNotes([]);
+      return;
+    }
+
+    const term = title.toLowerCase();
+    foundNote = allNotes.find((note) => (note.title || "").toLowerCase() === term);
+  }
+
+  if (!foundNote) {
+    resultContainer.textContent = `No note found with title "${title}".`;
+    renderNotes([]);
+    return;
+  }
+
+  /* Render the found note as a card in the notes list. */
+  renderNotes([foundNote]);
+
+  resultContainer.innerHTML = `<strong>Found:</strong> ${foundNote.title} <span class="tag">${foundNote.tag || "none"}</span>`;
+  highlightNote(foundNote.id);
 }
+
+
+/**
+ * Client-side semantic scoring helper.
+ * Scores a note against the query by counting overlapping keywords
+ * in title, content, and tag. Returns a score between 0 and 1.
+ */
+function scoreNote(note, query) {
+  const queryTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (queryTerms.length === 0) return 0;
+
+  const haystack = [
+    (note.title || "").toLowerCase(),
+    (note.content || "").toLowerCase(),
+    (note.tag || "").toLowerCase(),
+  ].join(" ");
+
+  let matches = 0;
+  for (const term of queryTerms) {
+    if (haystack.includes(term)) {
+      matches++;
+    }
+  }
+  return matches / queryTerms.length;
+}
+
 
 async function performSmartSearch() {
   const query = document.getElementById("smart-search-query").value.trim();
   const resultContainer = document.getElementById("smart-results");
-  resultContainer.textContent = "";
+  if (resultContainer) resultContainer.textContent = "";
   if (!query) {
-    resultContainer.textContent = "Enter a semantic query.";
     return;
   }
+
+  let matchedNotes = [];
+
+  /* Try the backend smart-search endpoint first. */
   try {
     const response = await fetch(`${BASE_API_URL}/notes/smart-search?q=${encodeURIComponent(query)}`);
-    if (!response.ok) {
-      throw new Error(`Smart search failed: ${response.status}`);
+    if (response.ok) {
+      const results = await response.json();
+      if (results.length > 0) {
+        matchedNotes = results;
+      }
     }
-    const results = await response.json();
-    resultContainer.innerHTML = results.length
-      ? results
-          .map(
-            (note) => `<div><strong>${note.title}</strong> (${note.tag}) — score ${note.score.toFixed(3)}</div>`
-          )
-          .join("")
-      : "No AI smart results.";
   } catch (err) {
-    resultContainer.textContent = err.message;
+    /* Backend not available — fall through to client-side scoring. */
+  }
+
+  /* Client-side fallback: rank allNotes by keyword overlap score. */
+  if (matchedNotes.length === 0) {
+    if (allNotes.length === 0) {
+      return;
+    }
+
+    matchedNotes = allNotes
+      .map((note) => ({ ...note, score: scoreNote(note, query) }))
+      .filter((note) => note.score > 0)
+      .sort((a, b) => b.score - a.score);
+  }
+
+  if (matchedNotes.length === 0) {
+    return;
+  }
+
+  /* Highlight top matched note, but do not render the list in the smart-results area. */
+  highlightNote(matchedNotes[0].id);
+  // optionally set tag filter to focus context
+  const notesTagFilter = document.getElementById("notes-tag-filter");
+  if (notesTagFilter && matchedNotes[0].tag) {
+    notesTagFilter.value = matchedNotes[0].tag;
+    updateNotesDisplay();
   }
 }
 
+
 async function performQuickTagJump(tag) {
-  const resultContainer = document.getElementById("quick-find-result");
-  resultContainer.textContent = "";
+  // do a quick tag jump: set the tag filter and highlight the first matching note
   try {
     const response = await fetch(`${BASE_API_URL}/notes/quick-find?tag=${encodeURIComponent(tag)}`);
-    if (!response.ok) {
-      throw new Error(`Quick find failed: ${response.status}`);
+    if (response.ok) {
+      const note = await response.json();
+      if (note && note.id !== undefined) {
+        const notesTagFilter = document.getElementById("notes-tag-filter");
+        if (notesTagFilter) {
+          notesTagFilter.value = note.tag || "";
+        }
+        updateNotesDisplay();
+        highlightNote(note.id);
+        return;
+      }
     }
-    const note = await response.json();
-    resultContainer.innerHTML = `<strong>Found:</strong> ${note.title} <span class="tag">${note.tag}</span>`;
-    highlightNote(note.id);
   } catch (err) {
-    resultContainer.textContent = err.message;
+    // fall back to client-side behavior
+  }
+
+  // client-side fallback: filter and highlight
+  const tagged = allNotes.filter((n) => (n.tag || "").toLowerCase() === tag.toLowerCase());
+  if (tagged.length > 0) {
+    updateTagFilterOptions();
+    const notesTagFilter = document.getElementById("notes-tag-filter");
+    if (notesTagFilter) notesTagFilter.value = tag;
+    updateNotesDisplay();
+    highlightNote(tagged[0].id);
   }
 }
+
 
 function highlightNote(id) {
   const cards = document.querySelectorAll(".note-card");
@@ -327,12 +745,14 @@ function highlightNote(id) {
   }
 }
 
+
 async function loadNotes() {
   setLoading(true);
   clearError();
   try {
     allNotes = await fetchNotes();
-    renderNotes(allNotes);
+    updateTagFilterOptions();
+    updateNotesDisplay();
   } catch (err) {
     showError(err.message);
   } finally {
@@ -340,39 +760,47 @@ async function loadNotes() {
   }
 }
 
-function attachListeners() {
-  document.getElementById("plain-search").addEventListener("input", (event) => {
-    clearError();
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
-    }
-    debounceTimer = setTimeout(() => {
-      filterNotes(event.target.value);
-    }, 400);
-  });
 
-  document.getElementById("note-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    clearError();
-    const title = document.getElementById("note-title").value.trim();
-    const content = document.getElementById("note-content").value.trim();
-    const tag = document.getElementById("note-tag").value.trim();
-    const owner_id = Number(document.getElementById("note-owner").value);
-    if (!title || !content) {
-      document.getElementById("form-error").textContent = "Title and content are required.";
-      return;
-    }
-    document.getElementById("form-error").textContent = "";
-    try {
-      const created = await createNote({ title, content, tag, owner_id });
-      allNotes.unshift(created);
-      renderNotes(allNotes);
-      event.target.reset();
-      document.getElementById("note-owner").value = owner_id;
-    } catch (err) {
-      document.getElementById("form-error").textContent = err.message;
-    }
-  });
+function attachListeners() {
+  const plainSearchInput = document.getElementById("plain-search");
+  if (plainSearchInput) {
+    plainSearchInput.addEventListener("input", (event) => {
+      clearError();
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      debounceTimer = setTimeout(() => {
+        filterNotes(event.target.value);
+      }, 400);
+    });
+  }
+
+  const noteForm = document.getElementById("note-form");
+  if (noteForm) {
+    noteForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      clearError();
+      const title = document.getElementById("note-title").value.trim();
+      const content = document.getElementById("note-content").value.trim();
+      const tag = document.getElementById("note-tag").value.trim();
+      const owner_id = Number(document.getElementById("note-owner").value);
+      if (!title || !content) {
+        document.getElementById("form-error").textContent = "Title and content are required.";
+        return;
+      }
+      document.getElementById("form-error").textContent = "";
+      try {
+        const created = await createNote({ title, content, tag, owner_id });
+        allNotes.unshift(created);
+        updateTagFilterOptions();
+        updateNotesDisplay();
+        event.target.reset();
+        document.getElementById("note-owner").value = owner_id;
+      } catch (err) {
+        document.getElementById("form-error").textContent = err.message;
+      }
+    });
+  }
 
   const rankBtn = document.getElementById("rank-search-btn");
   if (rankBtn) rankBtn.addEventListener("click", performRankSearch);
@@ -380,11 +808,19 @@ function attachListeners() {
   if (lookupBtn) lookupBtn.addEventListener("click", performLookup);
   const smartBtn = document.getElementById("smart-search-btn");
   if (smartBtn) smartBtn.addEventListener("click", performSmartSearch);
+  const notesTagFilter = document.getElementById("notes-tag-filter");
+  if (notesTagFilter) notesTagFilter.addEventListener("change", updateNotesDisplay);
+  const notesSortOrder = document.getElementById("notes-sort-order");
+  if (notesSortOrder) notesSortOrder.addEventListener("change", updateNotesDisplay);
+  const resetButton = document.getElementById("reset-filters-btn");
+  if (resetButton) resetButton.addEventListener("click", resetAllFilters);
   document.querySelectorAll(".quick-tag-btn").forEach((button) => {
     button.addEventListener("click", () => performQuickTagJump(button.dataset.tag));
-  });
-}
+  });}
 
-buildCategoryTree();
-attachListeners();
-loadNotes();
+
+window.addEventListener("DOMContentLoaded", () => {
+  buildCategoryTree();
+  attachListeners();
+  loadNotes();
+});
