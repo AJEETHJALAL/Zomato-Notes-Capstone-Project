@@ -150,6 +150,47 @@ main {
   gap: 1rem;
 }
 
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.quick-actions .form-group {
+  flex: 1 1 220px;
+  min-width: 160px;
+}
+
+.quick-tag-btn.active,
+.quick-metrics button.active {
+  background: #a82222;
+  border-color: #a82222;
+}
+
+.small-button {
+  padding: 0.6rem 0.85rem;
+  font-size: 0.9rem;
+}
+
+.bulk-upload-panel {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(197, 44, 44, 0.18);
+}
+
+.bulk-upload-panel h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: #7b1212;
+}
+
+.quick-metrics {
+  gap: 0.75rem;
+}
+
 .note-card {
   margin-bottom: 0;
 }
