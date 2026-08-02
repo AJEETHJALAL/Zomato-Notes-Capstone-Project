@@ -72,17 +72,44 @@
                         </div>
                         <div id="smart-results"></div>
                         <button id="reset-filters-btn" type="button" class="secondary">Reset all filters</button>
-                        </section>
+                        <div class="bulk-upload-panel">
+                            <h3>Bulk import notes</h3>
+                            <form id="bulk-import-form">
+                                <div class="form-group">
+                                    <label for="bulk-import-file">Sample .txt file</label>
+                                    <input id="bulk-import-file" type="file" accept=".txt" required />
+                                </div>
+                                <div class="form-group">
+                                    <label for="bulk-owner-id">Owner ID</label>
+                                    <input id="bulk-owner-id" type="number" min="1" value="1" required />
+                                </div>
+                                <button type="submit" class="secondary">Upload file</button>
+                            </form>
+                            <div id="import-status" class="info"></div>
+                        </div>
+                    </section>
                 </div>
             </div>
             <section class="panel" id="quick-tags-panel">
                 <h2>Quick Tag Jump</h2>
-                <div class="button-row">
+                <div class="button-row" id="quick-tag-buttons">
                     <button type="button" class="quick-tag-btn" data-tag="work">work</button>
                     <button type="button" class="quick-tag-btn" data-tag="health">health</button>
                     <button type="button" class="quick-tag-btn" data-tag="recipes">recipes</button>
                     <button type="button" class="quick-tag-btn" data-tag="travel">travel</button>
                     <button type="button" class="quick-tag-btn" data-tag="random">random</button>
+                </div>
+                <div class="quick-actions">
+                    <div class="form-group quick-id-filter">
+                        <label for="quick-id-filter">Filter by ID</label>
+                        <input id="quick-id-filter" type="number" placeholder="Note ID" min="1" />
+                    </div>
+                    <button id="sort-by-date-btn" type="button" class="secondary small-button">Sort by Date</button>
+                    <button id="quick-reset-filters-btn" type="button" class="secondary small-button">Reset filters</button>
+                </div>
+                <div class="button-row quick-metrics">
+                    <button type="button" id="quick-tag-summary-btn" class="small-button">count&gt;1</button>
+                    <button type="button" id="quick-long-notes-btn" class="small-button">Long-notes</button>
                 </div>
                 <div id="quick-find-result"></div>
             </section>

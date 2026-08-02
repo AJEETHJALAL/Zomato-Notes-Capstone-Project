@@ -4,7 +4,7 @@ import json
 import logging
 from typing import List, Optional
 from datetime import datetime
-from fastapi import FastAPI, Depends, HTTPException, Header, BackgroundTasks, UploadFile, File, Request, Response
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, UploadFile, File, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,7 +23,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 Base.metadata.create_all(bind=engine)
 
-DELETE_TOKEN = os.getenv("DELETE_TOKEN", "zomato-secret-token")
 FRONTEND_ORIGINS = [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
@@ -62,13 +61,6 @@ class ProcessTimeMiddleware:
 
 
 app.add_middleware(ProcessTimeMiddleware)
-
-
-async def auth_gate(x_token: Optional[str] = Header(None)) -> None:
-    if x_token is None:
-        raise HTTPException(status_code=401, detail="Missing x-token header")
-    if x_token != DELETE_TOKEN:
-        raise HTTPException(status_code=403, detail="Invalid x-token")
 
 
 def simulate_indexing(note_id: int) -> None:
@@ -229,11 +221,12 @@ def update_note(note_id: int, note_update: schemas.NoteUpdate, db: Session = Dep
 
 
 @app.delete("/notes/{note_id:int}")
-def delete_note(note_id: int, db: Session = Depends(get_db), _auth: None = Depends(auth_gate)):
+def delete_note(note_id: int, db: Session = Depends(get_db)):
     db_note = crud.get_note(db, note_id)
     if db_note is None:
         raise HTTPException(status_code=404, detail="Note not found")
     crud.delete_note(db, note_id)
+    logging.info("Deleted note %s", note_id)
     return JSONResponse(content={"detail": "Note deleted"})
 
 

@@ -1,5 +1,4 @@
 const BASE_API_URL = "http://127.0.0.1:8000";
-const DELETE_TOKEN = "zomato-secret-token";
 const CATEGORY_TREE = {
   name: "All Tags",
   children: [
@@ -20,7 +19,8 @@ const CATEGORY_TREE = {
 
 let allNotes = [];
 let debounceTimer = null;
-
+let selectedQuickTags = new Set();
+let quickSpecialNotes = null;
 
 if (typeof USE_MOCK === "undefined") {
   window.USE_MOCK = false;
@@ -88,10 +88,13 @@ async function deleteNote(id) {
   }
   const response = await fetch(`${BASE_API_URL}/notes/${id}`, {
     method: "DELETE",
-    headers: { "x-token": DELETE_TOKEN },
+    headers: {
+      "Accept": "application/json",
+    },
   });
   if (!response.ok) {
-    throw new Error(`Delete failed: ${response.status}`);
+    const text = await response.text();
+    throw new Error(`Delete failed: ${response.status} ${text}`);
   }
 }
 
@@ -354,6 +357,19 @@ async function uploadAttachment(noteId, file) {
   return response.json();
 }
 
+async function importNotes(ownerId, file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const response = await fetch(`${BASE_API_URL}/notes/import?owner_id=${encodeURIComponent(ownerId)}`, {
+    method: 'POST',
+    body: fd,
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Import failed: ${response.status} ${errText}`);
+  }
+  return response.json();
+}
 
 function showError(message) {
   const error = document.getElementById("error-message");
@@ -377,15 +393,20 @@ function getDisplayedNotes() {
   const searchTerm = document.getElementById("plain-search")?.value.trim().toLowerCase() || "";
   const tagFilter = document.getElementById("notes-tag-filter")?.value || "";
   const sortOrder = document.getElementById("notes-sort-order")?.value || "created_desc";
+  const idFilterValue = document.getElementById("quick-id-filter")?.value || "";
 
-  let filtered = allNotes.filter((note) => {
+  let filtered = quickSpecialNotes ? [...quickSpecialNotes] : allNotes.filter((note) => {
     const matchesSearch =
       !searchTerm ||
       note.title.toLowerCase().includes(searchTerm) ||
       note.tag.toLowerCase().includes(searchTerm) ||
       note.content.toLowerCase().includes(searchTerm);
     const matchesTag = !tagFilter || note.tag.toLowerCase() === tagFilter.toLowerCase();
-    return matchesSearch && matchesTag;
+    const matchesQuickTags =
+      selectedQuickTags.size === 0 || selectedQuickTags.has((note.tag || "").toLowerCase());
+    const matchesId =
+      !idFilterValue || note.id === Number(idFilterValue);
+    return matchesSearch && matchesTag && matchesQuickTags && matchesId;
   });
 
   filtered.sort((a, b) => {
@@ -467,7 +488,7 @@ function resetAllFilters() {
   if (smartResults) {
     smartResults.textContent = "";
   }
-  updateNotesDisplay();
+  resetQuickFilters();
 }
 
 function filterNotes(value) {
@@ -703,37 +724,106 @@ async function performSmartSearch() {
 }
 
 
-async function performQuickTagJump(tag) {
-  // do a quick tag jump: set the tag filter and highlight the first matching note
-  try {
-    const response = await fetch(`${BASE_API_URL}/notes/quick-find?tag=${encodeURIComponent(tag)}`);
-    if (response.ok) {
-      const note = await response.json();
-      if (note && note.id !== undefined) {
-        const notesTagFilter = document.getElementById("notes-tag-filter");
-        if (notesTagFilter) {
-          notesTagFilter.value = note.tag || "";
-        }
-        updateNotesDisplay();
-        highlightNote(note.id);
-        return;
-      }
-    }
-  } catch (err) {
-    // fall back to client-side behavior
-  }
-
-  // client-side fallback: filter and highlight
-  const tagged = allNotes.filter((n) => (n.tag || "").toLowerCase() === tag.toLowerCase());
-  if (tagged.length > 0) {
-    updateTagFilterOptions();
-    const notesTagFilter = document.getElementById("notes-tag-filter");
-    if (notesTagFilter) notesTagFilter.value = tag;
-    updateNotesDisplay();
-    highlightNote(tagged[0].id);
+function clearQuickSpecialMode() {
+  quickSpecialNotes = null;
+  const resultContainer = document.getElementById("quick-find-result");
+  if (resultContainer) {
+    resultContainer.textContent = "";
   }
 }
 
+function clearQuickSelections() {
+  selectedQuickTags.clear();
+  document.querySelectorAll(".quick-tag-btn").forEach((button) => {
+    button.classList.remove("active");
+  });
+}
+
+function toggleQuickTag(tag) {
+  clearQuickSpecialMode();
+  const normalized = tag.toLowerCase();
+  if (selectedQuickTags.has(normalized)) {
+    selectedQuickTags.delete(normalized);
+  } else {
+    selectedQuickTags.add(normalized);
+  }
+  document.querySelectorAll(".quick-tag-btn").forEach((button) => {
+    const buttonTag = button.dataset.tag?.toLowerCase();
+    if (buttonTag && selectedQuickTags.has(buttonTag)) {
+      button.classList.add("active");
+    } else {
+      button.classList.remove("active");
+    }
+  });
+  updateNotesDisplay();
+}
+
+async function performTagSummary() {
+  const resultContainer = document.getElementById("quick-find-result");
+  if (resultContainer) {
+    resultContainer.textContent = "Loading summary...";
+  }
+  clearQuickSelections();
+  try {
+    const response = await fetch(`${BASE_API_URL}/reports/tag-summary`);
+    if (!response.ok) {
+      throw new Error(`Tag summary failed: ${response.status}`);
+    }
+    const tags = await response.json();
+    const repeatedTags = tags.map((item) => item.tag.toLowerCase());
+    quickSpecialNotes = allNotes.filter((note) => repeatedTags.includes((note.tag || "").toLowerCase()));
+    if (resultContainer) {
+      resultContainer.innerHTML = tags.length
+        ? `<strong>Tags with count > 1:</strong> ${tags.map((item) => `${item.tag} (${item.count})`).join(", ")}`
+        : "No repeated tags found.";
+    }
+    updateNotesDisplay();
+  } catch (err) {
+    if (resultContainer) {
+      resultContainer.textContent = err.message;
+    }
+  }
+}
+
+async function performLongNotes() {
+  const resultContainer = document.getElementById("quick-find-result");
+  if (resultContainer) {
+    resultContainer.textContent = "Loading long notes...";
+  }
+  clearQuickSelections();
+  try {
+    const response = await fetch(`${BASE_API_URL}/reports/long-notes`);
+    if (!response.ok) {
+      throw new Error(`Long notes request failed: ${response.status}`);
+    }
+    const notes = await response.json();
+    quickSpecialNotes = notes;
+    if (resultContainer) {
+      resultContainer.innerHTML = notes.length
+        ? `<strong>Long notes returned:</strong> ${notes.length}`
+        : "No long notes found.";
+    }
+    updateNotesDisplay();
+  } catch (err) {
+    if (resultContainer) {
+      resultContainer.textContent = err.message;
+    }
+  }
+}
+
+function resetQuickFilters() {
+  clearQuickSelections();
+  clearQuickSpecialMode();
+  const quickIdFilter = document.getElementById("quick-id-filter");
+  if (quickIdFilter) {
+    quickIdFilter.value = "";
+  }
+  const notesSortOrder = document.getElementById("notes-sort-order");
+  if (notesSortOrder) {
+    notesSortOrder.value = "created_desc";
+  }
+  updateNotesDisplay();
+}
 
 function highlightNote(id) {
   const cards = document.querySelectorAll(".note-card");
@@ -751,6 +841,8 @@ async function loadNotes() {
   clearError();
   try {
     allNotes = await fetchNotes();
+    quickSpecialNotes = null;
+    clearQuickSelections();
     updateTagFilterOptions();
     updateNotesDisplay();
   } catch (err) {
@@ -814,9 +906,69 @@ function attachListeners() {
   if (notesSortOrder) notesSortOrder.addEventListener("change", updateNotesDisplay);
   const resetButton = document.getElementById("reset-filters-btn");
   if (resetButton) resetButton.addEventListener("click", resetAllFilters);
-  document.querySelectorAll(".quick-tag-btn").forEach((button) => {
-    button.addEventListener("click", () => performQuickTagJump(button.dataset.tag));
-  });}
+  const quickTagButtons = document.querySelectorAll(".quick-tag-btn");
+  quickTagButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.dataset.tag) {
+        toggleQuickTag(button.dataset.tag);
+      }
+    });
+  });
+  const quickIdFilter = document.getElementById("quick-id-filter");
+  if (quickIdFilter) {
+    quickIdFilter.addEventListener("input", updateNotesDisplay);
+  }
+  const sortByDateBtn = document.getElementById("sort-by-date-btn");
+  if (sortByDateBtn) {
+    sortByDateBtn.addEventListener("click", () => {
+      const notesSort = document.getElementById("notes-sort-order");
+      if (notesSort) {
+        notesSort.value = "created_desc";
+      }
+      updateNotesDisplay();
+    });
+  }
+  const quickResetBtn = document.getElementById("quick-reset-filters-btn");
+  if (quickResetBtn) {
+    quickResetBtn.addEventListener("click", resetQuickFilters);
+  }
+  const quickSummaryBtn = document.getElementById("quick-tag-summary-btn");
+  if (quickSummaryBtn) {
+    quickSummaryBtn.addEventListener("click", performTagSummary);
+  }
+  const quickLongNotesBtn = document.getElementById("quick-long-notes-btn");
+  if (quickLongNotesBtn) {
+    quickLongNotesBtn.addEventListener("click", performLongNotes);
+  }
+  const bulkImportForm = document.getElementById("bulk-import-form");
+  if (bulkImportForm) {
+    bulkImportForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const fileInput = document.getElementById("bulk-import-file");
+      const ownerInput = document.getElementById("bulk-owner-id");
+      const status = document.getElementById("import-status");
+      if (!fileInput || !ownerInput || !status) return;
+      if (!fileInput.files || fileInput.files.length === 0) {
+        status.textContent = "Please choose a .txt file to upload.";
+        return;
+      }
+      const ownerId = Number(ownerInput.value);
+      if (!ownerId || ownerId < 1) {
+        status.textContent = "Enter a valid owner ID.";
+        return;
+      }
+      status.textContent = "Uploading file...";
+      try {
+        await importNotes(ownerId, fileInput.files[0]);
+        status.textContent = "Notes imported successfully.";
+        await loadNotes();
+        fileInput.value = "";
+      } catch (err) {
+        status.textContent = err.message;
+      }
+    });
+  }
+}
 
 
 window.addEventListener("DOMContentLoaded", () => {
