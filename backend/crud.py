@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func, select
-from . import models, schemas
+import models, schemas
 from typing import List, Optional, Any
 
 

@@ -16,7 +16,19 @@
             <a href="#notes">Notes</a>
             <a href="#add-note">Add Note</a>
             <a href="#category-tree">Tags</a>
+            <button id="sign-in-toggle" class="secondary nav-signin">Sign in</button>
         </nav>
+        <div id="sign-in-panel" class="sign-in-panel" style="display:none;">
+            <form id="sign-in-form">
+                <label for="sign-owner-id">Owner ID</label>
+                <input id="sign-owner-id" type="number" min="1" value="1" required />
+                <div style="margin-top:0.5rem;display:flex;gap:0.5rem;">
+                  <button type="submit">Sign in</button>
+                  <button id="sign-out-btn" type="button" class="secondary" style="display:none;">Sign out</button>
+                </div>
+                <div id="sign-status" class="info" style="margin-top:0.5rem"></div>
+            </form>
+        </div>
     </header>
     <main>
         <section class="sidebar" id="category-tree">

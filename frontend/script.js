@@ -21,6 +21,7 @@ let allNotes = [];
 let debounceTimer = null;
 let selectedQuickTags = new Set();
 let quickSpecialNotes = null;
+let currentUser = null; // { id: number }
 
 if (typeof USE_MOCK === "undefined") {
   window.USE_MOCK = false;
@@ -854,6 +855,56 @@ async function loadNotes() {
 
 
 function attachListeners() {
+  // auth UI
+  const signToggle = document.getElementById("sign-in-toggle");
+  const signPanel = document.getElementById("sign-in-panel");
+  const signForm = document.getElementById("sign-in-form");
+  const signOutBtn = document.getElementById("sign-out-btn");
+  const signStatus = document.getElementById("sign-status");
+
+  if (signToggle && signPanel) {
+    signToggle.addEventListener("click", () => {
+      signPanel.style.display = signPanel.style.display === "none" ? "block" : "none";
+    });
+  }
+
+  if (signForm) {
+    signForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const ownerInput = document.getElementById("sign-owner-id");
+      const ownerId = Number(ownerInput?.value || 0);
+      if (!ownerId || ownerId < 1) {
+        if (signStatus) signStatus.textContent = "Enter a valid owner id.";
+        return;
+      }
+      // set current user locally (impersonate)
+      currentUser = { id: ownerId };
+      // propagate to Add Note owner field
+      const noteOwner = document.getElementById("note-owner");
+      if (noteOwner) {
+        noteOwner.value = ownerId;
+      }
+      if (signStatus) signStatus.textContent = `Signed in as user ${ownerId}`;
+      // show sign out button
+      if (signOutBtn) signOutBtn.style.display = "inline-block";
+      // hide submit button to avoid re-sign
+      const submitBtn = signForm.querySelector("button[type=submit]");
+      if (submitBtn) submitBtn.style.display = "none";
+    });
+  }
+
+  if (signOutBtn) {
+    signOutBtn.addEventListener("click", () => {
+      currentUser = null;
+      const noteOwner = document.getElementById("note-owner");
+      if (noteOwner) noteOwner.value = "1";
+      if (signStatus) signStatus.textContent = "Signed out";
+      // reset form
+      const submitBtn = signForm.querySelector("button[type=submit]");
+      if (submitBtn) submitBtn.style.display = "inline-block";
+      signOutBtn.style.display = "none";
+    });
+  }
   const plainSearchInput = document.getElementById("plain-search");
   if (plainSearchInput) {
     plainSearchInput.addEventListener("input", (event) => {
