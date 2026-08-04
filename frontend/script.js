@@ -16,6 +16,13 @@ const CATEGORY_TREE = {
   ],
 };
 
+const SYNONYM_MAP = {
+  work: ["project", "meeting", "task", "standup", "retrospective", "retros"],
+  health: ["fitness", "wellness", "exercise", "diet", "wellbeing"],
+  recipes: ["food", "cooking", "meal", "ingredient", "recipe", "dinner", "lunch", "breakfast"],
+  travel: ["trip", "journey", "vacation", "destination", "flight", "tour"],
+  random: ["misc", "miscellaneous", "general", "note"],
+};
 
 let allNotes = [];
 let debounceTimer = null;
@@ -26,7 +33,6 @@ let currentUser = null; // { id: number }
 if (typeof USE_MOCK === "undefined") {
   window.USE_MOCK = false;
 }
-
 
 async function fetchNotes(tag = "") {
   if (window.USE_MOCK) {
@@ -42,7 +48,6 @@ async function fetchNotes(tag = "") {
   }
   return response.json();
 }
-
 
 async function createNote(payload) {
   if (window.USE_MOCK) {
@@ -78,7 +83,6 @@ async function createNote(payload) {
   return created;
 }
 
-
 async function deleteNote(id) {
   if (window.USE_MOCK) {
     const index = MOCK_NOTES.findIndex((n) => n.id === id);
@@ -99,7 +103,6 @@ async function deleteNote(id) {
   }
 }
 
-
 function renderNotes(notes) {
   const list = document.getElementById("notes-list");
   list.innerHTML = "";
@@ -112,22 +115,18 @@ function renderNotes(notes) {
   });
 }
 
-
 function createNoteCard(note) {
   const card = document.createElement("article");
   card.className = "note-card";
   card.dataset.noteId = note.id;
 
-
   const title = document.createElement("h3");
   title.textContent = note.title;
   card.appendChild(title);
 
-
   const content = document.createElement("p");
   content.textContent = note.content;
   card.appendChild(content);
-
 
   const tagLine = document.createElement("p");
   tagLine.innerHTML = `<span class="tag">Tag:</span> ${note.tag || "(none)"}`;
@@ -145,11 +144,9 @@ function createNoteCard(note) {
     card.appendChild(attachLink);
   }
 
-
   const ownerInfo = document.createElement("p");
   ownerInfo.textContent = `Owner ID: ${note.owner_id}`;
   card.appendChild(ownerInfo);
-
 
   const editFields = document.createElement("div");
   editFields.className = "edit-fields";
@@ -310,7 +307,6 @@ function createNoteCard(note) {
   card.appendChild(controls);
 
 
-
   if (note.ai_suggestion) {
     const suggestion = document.createElement("div");
     suggestion.className = "ai-suggestion";
@@ -322,10 +318,8 @@ function createNoteCard(note) {
     card.appendChild(suggestion);
   }
 
-
   return card;
 }
-
 
 async function updateNoteTag(id, tag) {
   return updateNote(id, { tag });
@@ -390,9 +384,68 @@ function setLoading(isLoading) {
   }
 }
 
+function normalizeText(text) {
+  return (text || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function getQueryTerms(query) {
+  const tokens = normalizeText(query).split(" ").filter(Boolean);
+  const terms = new Set(tokens);
+
+  tokens.forEach((token) => {
+    const synonyms = SYNONYM_MAP[token];
+    if (synonyms) {
+      synonyms.forEach((synonym) => terms.add(synonym));
+    }
+  });
+
+  return Array.from(terms);
+}
+
+function relevanceScore(note, queryTerms) {
+  const haystack = normalizeText([note.title, note.content, note.tag].join(" "));
+  const titleText = normalizeText(note.title);
+  const tagText = normalizeText(note.tag);
+  let score = 0;
+
+  queryTerms.forEach((term) => {
+    if (haystack.includes(term)) {
+      score += 12;
+    }
+    if (titleText.includes(term)) {
+      score += 4;
+    }
+    if (tagText.includes(term)) {
+      score += 6;
+    }
+  });
+
+  const exactPhrase = queryTerms.join(" ");
+  if (exactPhrase && haystack.includes(exactPhrase)) {
+    score += 18;
+  }
+
+  return score;
+}
+
+function updateSmartSearchMeta(query, count) {
+  const meta = document.getElementById("smart-search-meta");
+  if (!meta) return;
+  if (!query) {
+    meta.style.display = "none";
+    meta.textContent = "";
+    return;
+  }
+  meta.style.display = "block";
+  meta.textContent = `${count} result${count === 1 ? "" : "s"} for "${query}"`;
+}
+
 function getDisplayedNotes() {
   const searchTerm = document.getElementById("plain-search")?.value.trim().toLowerCase() || "";
-  const tagFilter = document.getElementById("notes-tag-filter")?.value || "";
+  const relevanceQuery = document.getElementById("smart-search-query")?.value.trim() || "";
+  const relevanceTerms = relevanceQuery ? getQueryTerms(relevanceQuery) : [];
+  const tagDropdownValue = document.getElementById("notes-tag-filter")?.value || "";
+  const tagFilter = activeTagFilter || tagDropdownValue;
   const sortOrder = document.getElementById("notes-sort-order")?.value || "created_desc";
   const idFilterValue = document.getElementById("quick-id-filter")?.value || "";
 
@@ -410,27 +463,47 @@ function getDisplayedNotes() {
     return matchesSearch && matchesTag && matchesQuickTags && matchesId;
   });
 
-  filtered.sort((a, b) => {
-    if (sortOrder === "created_asc") {
-      return new Date(a.created_at) - new Date(b.created_at);
-    }
-    if (sortOrder === "created_desc") {
-      return new Date(b.created_at) - new Date(a.created_at);
-    }
-    if (sortOrder === "title_asc") {
-      return a.title.localeCompare(b.title);
-    }
-    if (sortOrder === "title_desc") {
-      return b.title.localeCompare(a.title);
-    }
-    return 0;
-  });
+  if (relevanceTerms.length > 0) {
+    const scored = filtered
+      .map((note) => ({ note, score: relevanceScore(note, relevanceTerms) }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score || new Date(b.note.created_at) - new Date(a.note.created_at));
 
+    filtered = scored.map((item) => item.note);
+  } else {
+    filtered.sort((a, b) => {
+      if (sortOrder === "created_asc") {
+        return new Date(a.created_at) - new Date(b.created_at);
+      }
+      if (sortOrder === "created_desc") {
+        return new Date(b.created_at) - new Date(a.created_at);
+      }
+      if (sortOrder === "title_asc") {
+        return a.title.localeCompare(b.title);
+      }
+      if (sortOrder === "title_desc") {
+        return b.title.localeCompare(a.title);
+      }
+      return 0;
+    });
+  }
+
+  updateSmartSearchMeta(relevanceQuery, filtered.length);
   return filtered;
 }
 
 function updateNotesDisplay() {
   renderNotes(getDisplayedNotes());
+}
+
+function updateActiveTreeLabels() {
+  document.querySelectorAll("#tree-root .tag-label").forEach((label) => {
+    if (activeTagFilter && label.dataset.tag?.toLowerCase() === activeTagFilter.toLowerCase()) {
+      label.classList.add("active-tag");
+    } else {
+      label.classList.remove("active-tag");
+    }
+  });
 }
 
 function updateTagFilterOptions() {
@@ -472,7 +545,9 @@ function resetAllFilters() {
   const notesTagFilter = document.getElementById("notes-tag-filter");
   const notesSortOrder = document.getElementById("notes-sort-order");
   const smartSearchQuery = document.getElementById("smart-search-query");
-  const smartResults = document.getElementById("smart-results");
+
+  activeTagFilter = null;
+  updateActiveTreeLabels();
 
   if (plainSearch) {
     plainSearch.value = "";
@@ -486,9 +561,7 @@ function resetAllFilters() {
   if (smartSearchQuery) {
     smartSearchQuery.value = "";
   }
-  if (smartResults) {
-    smartResults.textContent = "";
-  }
+  updateSmartSearchMeta("", 0);
   resetQuickFilters();
 }
 
@@ -496,17 +569,44 @@ function filterNotes(value) {
   updateNotesDisplay();
 }
 
-
 function renderTree(node) {
   const li = document.createElement("li");
   const label = document.createElement("span");
   label.textContent = node.name;
-  li.appendChild(label);
+  label.className = "tag-label";
+  label.dataset.tag = node.name;
+
+  if (activeTagFilter && node.name.toLowerCase() === activeTagFilter.toLowerCase()) {
+    label.classList.add("active-tag");
+  }
+
   label.addEventListener("click", (event) => {
     event.stopPropagation();
-    li.classList.toggle("open");
+
+    if (node.name === "All Tags") {
+      activeTagFilter = null;
+    } else if (activeTagFilter === node.name) {
+      activeTagFilter = null;
+    } else {
+      activeTagFilter = node.name;
+    }
+
+    const tagDropdown = document.getElementById("notes-tag-filter");
+    if (tagDropdown) {
+      tagDropdown.value = activeTagFilter || "";
+    }
+
+    clearQuickSelections();
+    clearQuickSpecialMode();
+    updateActiveTreeLabels();
+    updateNotesDisplay();
+
+    if (node.children && node.children.length > 0) {
+      li.classList.toggle("open");
+    }
   });
 
+  li.appendChild(label);
 
   if (node.children && node.children.length > 0) {
     const ul = document.createElement("ul");
@@ -518,7 +618,6 @@ function renderTree(node) {
   return li;
 }
 
-
 function buildCategoryTree() {
   const root = document.getElementById("tree-root");
   root.innerHTML = "";
@@ -526,7 +625,6 @@ function buildCategoryTree() {
   tree.appendChild(renderTree(CATEGORY_TREE));
   root.appendChild(tree);
 }
-
 
 async function performRankSearch() {
   const keyword = document.getElementById("rank-keyword").value.trim();
@@ -596,7 +694,6 @@ async function performRankSearch() {
     .join("");
 }
 
-
 async function performLookup() {
   const title = document.getElementById("lookup-title").value.trim();
   const algo = document.getElementById("lookup-algo").value;
@@ -648,82 +745,6 @@ async function performLookup() {
   resultContainer.innerHTML = `<strong>Found:</strong> ${foundNote.title} <span class="tag">${foundNote.tag || "none"}</span>`;
   highlightNote(foundNote.id);
 }
-
-
-/**
- * Client-side semantic scoring helper.
- * Scores a note against the query by counting overlapping keywords
- * in title, content, and tag. Returns a score between 0 and 1.
- */
-function scoreNote(note, query) {
-  const queryTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (queryTerms.length === 0) return 0;
-
-  const haystack = [
-    (note.title || "").toLowerCase(),
-    (note.content || "").toLowerCase(),
-    (note.tag || "").toLowerCase(),
-  ].join(" ");
-
-  let matches = 0;
-  for (const term of queryTerms) {
-    if (haystack.includes(term)) {
-      matches++;
-    }
-  }
-  return matches / queryTerms.length;
-}
-
-
-async function performSmartSearch() {
-  const query = document.getElementById("smart-search-query").value.trim();
-  const resultContainer = document.getElementById("smart-results");
-  if (resultContainer) resultContainer.textContent = "";
-  if (!query) {
-    return;
-  }
-
-  let matchedNotes = [];
-
-  /* Try the backend smart-search endpoint first. */
-  try {
-    const response = await fetch(`${BASE_API_URL}/notes/smart-search?q=${encodeURIComponent(query)}`);
-    if (response.ok) {
-      const results = await response.json();
-      if (results.length > 0) {
-        matchedNotes = results;
-      }
-    }
-  } catch (err) {
-    /* Backend not available — fall through to client-side scoring. */
-  }
-
-  /* Client-side fallback: rank allNotes by keyword overlap score. */
-  if (matchedNotes.length === 0) {
-    if (allNotes.length === 0) {
-      return;
-    }
-
-    matchedNotes = allNotes
-      .map((note) => ({ ...note, score: scoreNote(note, query) }))
-      .filter((note) => note.score > 0)
-      .sort((a, b) => b.score - a.score);
-  }
-
-  if (matchedNotes.length === 0) {
-    return;
-  }
-
-  /* Highlight top matched note, but do not render the list in the smart-results area. */
-  highlightNote(matchedNotes[0].id);
-  // optionally set tag filter to focus context
-  const notesTagFilter = document.getElementById("notes-tag-filter");
-  if (notesTagFilter && matchedNotes[0].tag) {
-    notesTagFilter.value = matchedNotes[0].tag;
-    updateNotesDisplay();
-  }
-}
-
 
 function clearQuickSpecialMode() {
   quickSpecialNotes = null;
@@ -836,7 +857,6 @@ function highlightNote(id) {
   }
 }
 
-
 async function loadNotes() {
   setLoading(true);
   clearError();
@@ -852,7 +872,6 @@ async function loadNotes() {
     setLoading(false);
   }
 }
-
 
 function attachListeners() {
   // auth UI
@@ -949,10 +968,25 @@ function attachListeners() {
   if (rankBtn) rankBtn.addEventListener("click", performRankSearch);
   const lookupBtn = document.getElementById("lookup-btn");
   if (lookupBtn) lookupBtn.addEventListener("click", performLookup);
-  const smartBtn = document.getElementById("smart-search-btn");
-  if (smartBtn) smartBtn.addEventListener("click", performSmartSearch);
+  const smartSearchInput = document.getElementById("smart-search-query");
+  if (smartSearchInput) {
+    smartSearchInput.addEventListener("input", (event) => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      debounceTimer = setTimeout(() => {
+        updateNotesDisplay();
+      }, 250);
+    });
+  }
   const notesTagFilter = document.getElementById("notes-tag-filter");
-  if (notesTagFilter) notesTagFilter.addEventListener("change", updateNotesDisplay);
+  if (notesTagFilter) {
+    notesTagFilter.addEventListener("change", () => {
+      activeTagFilter = notesTagFilter.value || null;
+      updateActiveTreeLabels();
+      updateNotesDisplay();
+    });
+  }
   const notesSortOrder = document.getElementById("notes-sort-order");
   if (notesSortOrder) notesSortOrder.addEventListener("change", updateNotesDisplay);
   const resetButton = document.getElementById("reset-filters-btn");
@@ -1021,9 +1055,10 @@ function attachListeners() {
   }
 }
 
-
 window.addEventListener("DOMContentLoaded", () => {
   buildCategoryTree();
   attachListeners();
   loadNotes();
 });
+// State management
+let activeTagFilter = null;

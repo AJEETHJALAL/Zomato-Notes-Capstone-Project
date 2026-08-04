@@ -478,3 +478,27 @@ label {
     grid-template-columns: 1fr;
   }
 }
+.tag-tree-list {
+    list-style-type: none;
+    padding-left: 1rem;
+    margin: 0;
+}
+
+.tag-label {
+    cursor: pointer;
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4rem;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.tag-label:hover {
+    background-color: #f0f0f0;
+    color: #e23744; /* Zomato Red */
+}
+
+.tag-label.active-tag {
+    background-color: #e23744;
+    color: #ffffff;
+    font-weight: 600;
+}
