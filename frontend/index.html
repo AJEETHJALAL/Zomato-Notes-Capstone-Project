@@ -79,10 +79,11 @@
                     <section class="panel" id="smart-search-panel">
                         <h2>Smart Search (AI)</h2>
                         <div class="control-row">
-                            <input id="smart-search-query" type="text" placeholder="Semantic query" />
-                            <button id="smart-search-btn" type="button">Search AI</button>
+                            <input id="smart-search-query" type="text" placeholder="Search by intent, keywords, synonyms..." />
                         </div>
-                        <div id="smart-results"></div>
+
+                        <!-- Instant relevance metrics -->
+                        <div id="smart-search-meta" class="info" style="display: none; margin: 0.5rem 0; font-size: 0.9rem; color: #666;"></div>
                         <button id="reset-filters-btn" type="button" class="secondary">Reset all filters</button>
                         <div class="bulk-upload-panel">
                             <h3>Bulk import notes</h3>
