@@ -9,8 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError
-from . import crud, models, schemas, ai_service, semantic_search
-from .database import Base, engine, get_db
+import crud, models, schemas, ai_service, semantic_search
+from database import Base, engine, get_db
 from sqlalchemy.orm import Session
 import pathlib
 

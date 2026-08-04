@@ -52,6 +52,73 @@ h2 {
   letter-spacing: -0.05em;
 }
 
+.auth {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+  margin-left: 1rem;
+}
+
+/* Make the sign-in toggle clearly visible in the header */
+#sign-in-toggle {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #fff;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#sign-in-toggle:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+/* ensure nav doesn't push auth offscreen */
+#top-nav nav {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex: 1 1 auto;
+}
+
+#top-nav {
+  gap: 1rem;
+}
+
+.sign-in-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  background: #fffaf9;
+  border: 1px solid rgba(197,44,44,0.18);
+  padding: 0.75rem;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(155, 34, 34, 0.08);
+  min-width: 220px;
+  z-index: 50;
+}
+
+.sign-in-panel label {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+  color: #5a1111;
+}
+
+.sign-in-panel input[type="number"] {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #e5bcbc;
+  background: #fff6f6;
+}
+
+#sign-status {
+  font-size: 0.85rem;
+  color: #4b1a1a;
+}
+
 main {
   display: grid;
   grid-template-columns: 260px 1fr;
