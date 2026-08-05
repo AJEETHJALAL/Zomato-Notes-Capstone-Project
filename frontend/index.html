@@ -10,148 +10,185 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <header id="top-nav">
-        <div class="brand">Zomato Notes</div>
-        <nav>
-            <a href="#notes">Notes</a>
-            <a href="#add-note">Add Note</a>
-            <a href="#category-tree">Tags</a>
-            <button id="sign-in-toggle" class="secondary nav-signin">Sign in</button>
-        </nav>
-        <div id="sign-in-panel" class="sign-in-panel" style="display:none;">
-            <form id="sign-in-form">
-                <label for="sign-owner-id">Owner ID</label>
-                <input id="sign-owner-id" type="number" min="1" value="1" required />
-                <div style="margin-top:0.5rem;display:flex;gap:0.5rem;">
-                  <button type="submit">Sign in</button>
-                  <button id="sign-out-btn" type="button" class="secondary" style="display:none;">Sign out</button>
-                </div>
-                <div id="sign-status" class="info" style="margin-top:0.5rem"></div>
-            </form>
-        </div>
-    </header>
-    <main>
-        <section class="sidebar" id="category-tree">
-            <h2>Tag Tree</h2>
-            <div id="tree-root"></div>
-        </section>
-        <section class="content">
-            <div class="two-column">
-                <div class="left-col">
-                    <section class="panel" id="add-note">
-                        <h2>Add Note</h2>
-                        <form id="note-form">
-                            <div class="form-group">
-                                <label for="note-title">Title</label>
-                                <input id="note-title" name="title" required maxlength="120" />
-                            </div>
-                            <div class="form-group">
-                                <label for="note-content">Content</label>
-                                <textarea id="note-content" name="content" required rows="4"></textarea>
-                            </div>
-                            <div class="form-group">
-                                <label for="note-tag">Tag</label>
-                                <input id="note-tag" name="tag" />
-                            </div>
-                            <div class="form-group">
-                                <label for="note-attachment"><span class="attach-icon">📎</span> Attach files</label>
-                                <input id="note-attachment" name="attachment" type="file" accept="image/*,application/pdf" />
-                            </div>
-                            <div class="form-group">
-                                <label for="note-owner">Owner ID</label>
-                                <input id="note-owner" name="owner_id" type="number" value="1" min="1" required />
-                            </div>
-                            <div id="form-error" class="error"></div>
-                            <button type="submit">Create note</button>
-                        </form>
-                    </section>
-                </div>
-                <div class="right-col">
-                    <section class="panel" id="search-panel">
-                        <h2>Search</h2>
-                        <div class="control-row">
-                            <label for="plain-search">Filter notes by title or tag</label>
-                            <input id="plain-search" type="search" placeholder="Search notes..." />
-                        </div>
-                        <div id="loading-message" class="info">Loading notes…</div>
-                        <div id="error-message" class="error"></div>
-                    </section>
-                    <section class="panel" id="smart-search-panel">
-                        <h2>Smart Search (AI)</h2>
-                        <div class="control-row">
-                            <input id="smart-search-query" type="text" placeholder="Search by intent, keywords, synonyms..." />
-                        </div>
-
-                        <!-- Instant relevance metrics -->
-                        <div id="smart-search-meta" class="info" style="display: none; margin: 0.5rem 0; font-size: 0.9rem; color: #666;"></div>
-                        <button id="reset-filters-btn" type="button" class="secondary">Reset all filters</button>
-                        <div class="bulk-upload-panel">
-                            <h3>Bulk import notes</h3>
-                            <form id="bulk-import-form">
-                                <div class="form-group">
-                                    <label for="bulk-import-file">Sample .txt file</label>
-                                    <input id="bulk-import-file" type="file" accept=".txt" required />
-                                </div>
-                                <div class="form-group">
-                                    <label for="bulk-owner-id">Owner ID</label>
-                                    <input id="bulk-owner-id" type="number" min="1" value="1" required />
-                                </div>
-                                <button type="submit" class="secondary">Upload file</button>
-                            </form>
-                            <div id="import-status" class="info"></div>
-                        </div>
-                    </section>
-                </div>
+    <section id="auth-screen" class="auth-screen">
+        <div class="auth-card">
+            <h1>Welcome to Zomato Notes</h1>
+            <p>Login to continue or create a new account.</p>
+            <div class="auth-actions">
+                <button id="show-login-btn" type="button">Login</button>
+                <button id="show-register-btn" type="button" class="secondary">Create Account</button>
             </div>
-            <section class="panel" id="quick-tags-panel">
-                <h2>Quick Tag Jump</h2>
-                <div class="button-row" id="quick-tag-buttons">
-                    <button type="button" class="quick-tag-btn" data-tag="work">work</button>
-                    <button type="button" class="quick-tag-btn" data-tag="health">health</button>
-                    <button type="button" class="quick-tag-btn" data-tag="recipes">recipes</button>
-                    <button type="button" class="quick-tag-btn" data-tag="travel">travel</button>
-                    <button type="button" class="quick-tag-btn" data-tag="random">random</button>
+
+            <form id="login-form" class="auth-form">
+                <div class="form-group">
+                    <label for="login-email">Email</label>
+                    <input id="login-email" type="email" required />
                 </div>
-                <div class="quick-actions">
-                    <div class="form-group quick-id-filter">
-                        <label for="quick-id-filter">Filter by ID</label>
-                        <input id="quick-id-filter" type="number" placeholder="Note ID" min="1" />
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <div class="password-field">
+                        <input id="login-password" type="password" required />
+                        <button id="toggle-login-password" type="button" class="eye-btn" aria-label="Toggle login password">👁️</button>
                     </div>
-                    <button id="sort-by-date-btn" type="button" class="secondary small-button">Sort by Date</button>
-                    <button id="quick-reset-filters-btn" type="button" class="secondary small-button">Reset filters</button>
                 </div>
-                <div class="button-row quick-metrics">
-                    <button type="button" id="quick-tag-summary-btn" class="small-button">count&gt;1</button>
-                    <button type="button" id="quick-long-notes-btn" class="small-button">Long-notes</button>
+                <button type="submit">Login</button>
+            </form>
+
+            <form id="register-form" class="auth-form" style="display:none;">
+                <div class="form-group">
+                    <label for="register-name">Name</label>
+                    <input id="register-name" type="text" required />
                 </div>
-                <div id="quick-find-result"></div>
+                <div class="form-group">
+                    <label for="register-email">Email</label>
+                    <input id="register-email" type="email" required />
+                </div>
+                <div class="form-group">
+                    <label for="register-password">Password</label>
+                    <div class="password-field">
+                        <input id="register-password" type="password" minlength="8" required />
+                        <button id="toggle-register-password" type="button" class="eye-btn" aria-label="Toggle register password">👁️</button>
+                    </div>
+                </div>
+                <button type="submit">Create Account</button>
+            </form>
+
+            <div id="auth-status" class="info"></div>
+        </div>
+    </section>
+
+    <div id="app-shell" style="display:none;">
+        <header id="top-nav">
+            <div class="brand-wrap">
+                <img
+                    id="delivery-biker-gif"
+                    src="https://media.tenor.com/Uj8fMAlQ7iQAAAAi/delivery-scooter.gif"
+                    alt="Delivery biker"
+                />
+                <div class="brand">Zomato Notes</div>
+            </div>
+            <nav>
+                <a class="nav-link" href="#notes">Notes</a>
+                <a class="nav-link" href="#add-note">Add Note</a>
+                <a class="nav-link" href="#category-tree">Tags</a>
+                <a class="nav-link" href="#quick-tags-panel">Quick Jump</a>
+            </nav>
+            <div class="auth-inline">
+                <span id="signed-user-label"></span>
+                <button id="sign-out-btn" type="button" class="secondary">Sign out</button>
+            </div>
+        </header>
+        <main>
+            <section class="sidebar panel" id="category-tree">
+                <h2>Tag Tree</h2>
+                <div id="tree-root"></div>
             </section>
-            <section class="panel" id="notes">
-                <h2>Notes</h2>
-                <div class="control-row" id="notes-controls">
-                    <div class="form-group">
-                        <label for="notes-tag-filter">Filter by tag</label>
-                        <select id="notes-tag-filter">
-                            <option value="">All tags</option>
-                        </select>
+            <section class="content">
+                <div class="two-column">
+                    <div class="left-col">
+                        <section class="panel" id="add-note">
+                            <h2>Add Note</h2>
+                            <form id="note-form">
+                                <div class="form-group">
+                                    <label for="note-title">Title</label>
+                                    <input id="note-title" name="title" required maxlength="120" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="note-content">Content</label>
+                                    <textarea id="note-content" name="content" required rows="4"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="note-tag">Tag</label>
+                                    <input id="note-tag" name="tag" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="note-attachment"><span class="attach-icon">📎</span> Attach files</label>
+                                    <input id="note-attachment" name="attachment" type="file" accept="image/*,application/pdf" />
+                                </div>
+                                <div id="form-error" class="error"></div>
+                                <button type="submit">Create note</button>
+                            </form>
+                        </section>
                     </div>
-                    <div class="form-group">
-                        <label for="notes-sort-order">Sort by</label>
-                        <select id="notes-sort-order">
-                            <option value="created_desc">Newest first</option>
-                            <option value="created_asc">Oldest first</option>
-                            <option value="title_asc">Title A → Z</option>
-                            <option value="title_desc">Title Z → A</option>
-                        </select>
+                    <div class="right-col">
+                        <section class="panel" id="search-panel">
+                            <h2>Search</h2>
+                            <div class="control-row">
+                                <label for="plain-search">Filter notes by title or tag</label>
+                                <input id="plain-search" type="search" placeholder="Search notes..." />
+                            </div>
+                            <div id="loading-message" class="info">Loading notes…</div>
+                            <div id="error-message" class="error"></div>
+                        </section>
+                        <section class="panel" id="smart-search-panel">
+                            <h2>Smart Search (AI)</h2>
+                            <div class="control-row">
+                                <input id="smart-search-query" type="text" placeholder="Search by intent, keywords, synonyms..." />
+                            </div>
+
+                            <div id="smart-search-meta" class="info" style="display: none; margin: 0.5rem 0; font-size: 0.9rem; color: #666;"></div>
+                            <button id="reset-filters-btn" type="button" class="secondary">Reset all filters</button>
+                            <div class="bulk-upload-panel">
+                                <h3>Bulk import notes</h3>
+                                <form id="bulk-import-form">
+                                    <div class="form-group">
+                                        <label for="bulk-import-file">Sample .txt file</label>
+                                        <input id="bulk-import-file" type="file" accept=".txt" required />
+                                    </div>
+                                    <button type="submit" class="secondary">Upload file</button>
+                                </form>
+                                <div id="import-status" class="info"></div>
+                            </div>
+                        </section>
                     </div>
                 </div>
-                <div id="notes-list"></div>
+                <section class="panel" id="quick-tags-panel">
+                    <h2>Quick Tag Jump</h2>
+                    <div class="form-group quick-tag-select-wrap">
+                        <label for="quick-tag-select">Choose one or more tags</label>
+                        <select id="quick-tag-select" multiple size="6"></select>
+                    </div>
+                    <div class="quick-actions">
+                        <div class="form-group quick-id-filter">
+                            <label for="quick-id-filter">Filter by Owner ID</label>
+                            <input id="quick-id-filter" type="number" placeholder="Owner ID" min="1" />
+                        </div>
+                        <button id="sort-by-date-btn" type="button" class="secondary small-button">Sort by Date</button>
+                        <button id="quick-reset-filters-btn" type="button" class="secondary small-button">Reset filters</button>
+                    </div>
+                    <div class="button-row quick-metrics">
+                        <button type="button" id="quick-tag-summary-btn" class="small-button">count&gt;1</button>
+                        <button type="button" id="quick-long-notes-btn" class="small-button">Long-notes</button>
+                    </div>
+                    <div id="quick-find-result"></div>
+                </section>
+                <section class="panel" id="notes">
+                    <h2>Notes</h2>
+                    <div class="control-row" id="notes-controls">
+                        <div class="form-group">
+                            <label for="notes-tag-filter">Filter by tag</label>
+                            <select id="notes-tag-filter">
+                                <option value="">All tags</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="notes-sort-order">Sort by</label>
+                            <select id="notes-sort-order">
+                                <option value="created_desc">Newest first</option>
+                                <option value="created_asc">Oldest first</option>
+                                <option value="title_asc">Title A → Z</option>
+                                <option value="title_desc">Title Z → A</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="notes-list"></div>
+                </section>
             </section>
-        </section>
-    </main>
-    <footer>
-        <p>Built for Zomato Notes capstone.</p>
-    </footer>
+        </main>
+        <footer>
+            <p>Built for Zomato Notes capstone.</p>
+        </footer>
+    </div>
     <script src="mock-data.js"></script>
     <script src="script.js"></script>
 </body>

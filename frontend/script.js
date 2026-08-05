@@ -1,19 +1,11 @@
 const BASE_API_URL = "http://127.0.0.1:8000";
-const CATEGORY_TREE = {
-  name: "All Tags",
-  children: [
-    { name: "Work", children: [
-      { name: "Standups", children: [] },
-      { name: "Retros", children: [] },
-    ]},
-    { name: "Personal", children: [
-      { name: "Health", children: [
-        { name: "Fitness", children: [] },
-      ]},
-      { name: "Recipes", children: [] },
-    ]},
-    { name: "Travel", children: [] },
-  ],
+const DEFAULT_TAGS = ["work", "health", "recipes", "travel", "random"];
+const TAG_ICON_MAP = {
+  work: "💼",
+  health: "💪",
+  recipes: "🍽️",
+  travel: "🧳",
+  random: "🗒️",
 };
 
 const SYNONYM_MAP = {
@@ -30,6 +22,37 @@ let selectedQuickTags = new Set();
 let quickSpecialNotes = null;
 let currentUser = null; // { id: number }
 
+function persistCurrentUser() {
+  if (currentUser) {
+    localStorage.setItem("zomatoNotesCurrentUser", JSON.stringify(currentUser));
+  } else {
+    localStorage.removeItem("zomatoNotesCurrentUser");
+  }
+}
+
+function restoreCurrentUser() {
+  try {
+    const raw = localStorage.getItem("zomatoNotesCurrentUser");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function getTagIcon(tag) {
+  return TAG_ICON_MAP[(tag || "").toLowerCase()] || "🏷️";
+}
+
+function absoluteAttachmentUrl(url) {
+  if (!url) {
+    return "";
+  }
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  return `${BASE_API_URL}${url}`;
+}
+
 if (typeof USE_MOCK === "undefined") {
   window.USE_MOCK = false;
 }
@@ -45,6 +68,32 @@ async function fetchNotes(tag = "") {
   const response = await fetch(url.toString());
   if (!response.ok) {
     throw new Error(`Failed to fetch notes: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+async function loginUser(email, password) {
+  const response = await fetch(`${BASE_API_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Login failed: ${response.status} ${text}`);
+  }
+  return response.json();
+}
+
+async function createAccount(name, email, password) {
+  const response = await fetch(`${BASE_API_URL}/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, email, password }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Create account failed: ${response.status} ${text}`);
   }
   return response.json();
 }
@@ -132,10 +181,21 @@ function createNoteCard(note) {
   tagLine.innerHTML = `<span class="tag">Tag:</span> ${note.tag || "(none)"}`;
   card.appendChild(tagLine);
 
-  // show attachment paperclip if available
+  // show attachment preview/link if available
   if (note.attachment_url) {
+    const attachmentUrl = absoluteAttachmentUrl(note.attachment_url);
+    const isImage = /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(attachmentUrl);
+
+    if (isImage) {
+      const preview = document.createElement("img");
+      preview.src = attachmentUrl;
+      preview.alt = `Attachment preview for ${note.title}`;
+      preview.className = "attachment-preview";
+      card.appendChild(preview);
+    }
+
     const attachLink = document.createElement("a");
-    attachLink.href = note.attachment_url;
+    attachLink.href = attachmentUrl;
     attachLink.target = "_blank";
     attachLink.rel = "noopener noreferrer";
     attachLink.className = "attachment-link";
@@ -459,7 +519,7 @@ function getDisplayedNotes() {
     const matchesQuickTags =
       selectedQuickTags.size === 0 || selectedQuickTags.has((note.tag || "").toLowerCase());
     const matchesId =
-      !idFilterValue || note.id === Number(idFilterValue);
+      !idFilterValue || note.owner_id === Number(idFilterValue);
     return matchesSearch && matchesTag && matchesQuickTags && matchesId;
   });
 
@@ -506,6 +566,37 @@ function updateActiveTreeLabels() {
   });
 }
 
+function getAllKnownTags() {
+  const tags = new Set(DEFAULT_TAGS);
+  allNotes.forEach((note) => {
+    const cleanedTag = (note.tag || "").trim().toLowerCase();
+    if (cleanedTag) {
+      tags.add(cleanedTag);
+    }
+  });
+  return Array.from(tags).sort((a, b) => a.localeCompare(b));
+}
+
+function renderQuickTagSelect() {
+  const select = document.getElementById("quick-tag-select");
+  if (!select) {
+    return;
+  }
+
+  const selectedBefore = new Set(Array.from(select.selectedOptions).map((option) => option.value.toLowerCase()));
+  select.innerHTML = "";
+
+  getAllKnownTags().forEach((tag) => {
+    const option = document.createElement("option");
+    option.value = tag;
+    option.textContent = `${getTagIcon(tag)} ${tag}`;
+    if (selectedBefore.has(tag) || selectedQuickTags.has(tag)) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  });
+}
+
 function updateTagFilterOptions() {
   const select = document.getElementById("notes-tag-filter");
   if (!select) {
@@ -513,12 +604,7 @@ function updateTagFilterOptions() {
   }
 
   const currentValue = select.value;
-  const tagSet = new Set();
-  allNotes.forEach((note) => {
-    if (note.tag?.trim()) {
-      tagSet.add(note.tag.trim());
-    }
-  });
+  const tags = getAllKnownTags();
 
   select.innerHTML = "";
   const allOption = document.createElement("option");
@@ -526,18 +612,28 @@ function updateTagFilterOptions() {
   allOption.textContent = "All tags";
   select.appendChild(allOption);
 
-  Array.from(tagSet)
-    .sort((a, b) => a.localeCompare(b))
-    .forEach((tag) => {
-      const option = document.createElement("option");
-      option.value = tag;
-      option.textContent = tag;
-      select.appendChild(option);
-    });
+  tags.forEach((tag) => {
+    const option = document.createElement("option");
+    option.value = tag;
+    option.textContent = tag;
+    select.appendChild(option);
+  });
 
-  if (currentValue && Array.from(tagSet).includes(currentValue)) {
+  if (currentValue && tags.includes(currentValue.toLowerCase())) {
     select.value = currentValue;
   }
+
+  renderQuickTagSelect();
+  buildCategoryTree();
+}
+
+function clearTagTreeFilter() {
+  activeTagFilter = null;
+  const notesTagFilter = document.getElementById("notes-tag-filter");
+  if (notesTagFilter) {
+    notesTagFilter.value = "";
+  }
+  updateActiveTreeLabels();
 }
 
 function resetAllFilters() {
@@ -546,8 +642,7 @@ function resetAllFilters() {
   const notesSortOrder = document.getElementById("notes-sort-order");
   const smartSearchQuery = document.getElementById("smart-search-query");
 
-  activeTagFilter = null;
-  updateActiveTreeLabels();
+  clearTagTreeFilter();
 
   if (plainSearch) {
     plainSearch.value = "";
@@ -569,26 +664,26 @@ function filterNotes(value) {
   updateNotesDisplay();
 }
 
-function renderTree(node) {
+function renderTreeLabel(name) {
   const li = document.createElement("li");
   const label = document.createElement("span");
-  label.textContent = node.name;
+  label.textContent = `${getTagIcon(name)} ${name}`;
   label.className = "tag-label";
-  label.dataset.tag = node.name;
+  label.dataset.tag = name;
 
-  if (activeTagFilter && node.name.toLowerCase() === activeTagFilter.toLowerCase()) {
+  if (activeTagFilter && name.toLowerCase() === activeTagFilter.toLowerCase()) {
     label.classList.add("active-tag");
   }
 
   label.addEventListener("click", (event) => {
     event.stopPropagation();
 
-    if (node.name === "All Tags") {
+    if (name === "All Tags") {
       activeTagFilter = null;
-    } else if (activeTagFilter === node.name) {
+    } else if (activeTagFilter === name) {
       activeTagFilter = null;
     } else {
-      activeTagFilter = node.name;
+      activeTagFilter = name;
     }
 
     const tagDropdown = document.getElementById("notes-tag-filter");
@@ -600,29 +695,26 @@ function renderTree(node) {
     clearQuickSpecialMode();
     updateActiveTreeLabels();
     updateNotesDisplay();
-
-    if (node.children && node.children.length > 0) {
-      li.classList.toggle("open");
-    }
   });
 
   li.appendChild(label);
-
-  if (node.children && node.children.length > 0) {
-    const ul = document.createElement("ul");
-    node.children.forEach((child) => {
-      ul.appendChild(renderTree(child));
-    });
-    li.appendChild(ul);
-  }
   return li;
 }
 
 function buildCategoryTree() {
   const root = document.getElementById("tree-root");
+  if (!root) {
+    return;
+  }
   root.innerHTML = "";
   const tree = document.createElement("ul");
-  tree.appendChild(renderTree(CATEGORY_TREE));
+  tree.className = "tag-tree-list";
+  tree.appendChild(renderTreeLabel("All Tags"));
+
+  getAllKnownTags().forEach((tag) => {
+    tree.appendChild(renderTreeLabel(tag));
+  });
+
   root.appendChild(tree);
 }
 
@@ -756,27 +848,23 @@ function clearQuickSpecialMode() {
 
 function clearQuickSelections() {
   selectedQuickTags.clear();
-  document.querySelectorAll(".quick-tag-btn").forEach((button) => {
-    button.classList.remove("active");
-  });
+  const quickTagSelect = document.getElementById("quick-tag-select");
+  if (quickTagSelect) {
+    Array.from(quickTagSelect.options).forEach((option) => {
+      option.selected = false;
+    });
+  }
 }
 
-function toggleQuickTag(tag) {
+function syncQuickTagSelection() {
   clearQuickSpecialMode();
-  const normalized = tag.toLowerCase();
-  if (selectedQuickTags.has(normalized)) {
-    selectedQuickTags.delete(normalized);
-  } else {
-    selectedQuickTags.add(normalized);
+  selectedQuickTags.clear();
+  const quickTagSelect = document.getElementById("quick-tag-select");
+  if (quickTagSelect) {
+    Array.from(quickTagSelect.selectedOptions).forEach((option) => {
+      selectedQuickTags.add(option.value.toLowerCase());
+    });
   }
-  document.querySelectorAll(".quick-tag-btn").forEach((button) => {
-    const buttonTag = button.dataset.tag?.toLowerCase();
-    if (buttonTag && selectedQuickTags.has(buttonTag)) {
-      button.classList.add("active");
-    } else {
-      button.classList.remove("active");
-    }
-  });
   updateNotesDisplay();
 }
 
@@ -836,6 +924,7 @@ async function performLongNotes() {
 function resetQuickFilters() {
   clearQuickSelections();
   clearQuickSpecialMode();
+  clearTagTreeFilter();
   const quickIdFilter = document.getElementById("quick-id-filter");
   if (quickIdFilter) {
     quickIdFilter.value = "";
@@ -874,56 +963,21 @@ async function loadNotes() {
 }
 
 function attachListeners() {
-  // auth UI
-  const signToggle = document.getElementById("sign-in-toggle");
-  const signPanel = document.getElementById("sign-in-panel");
-  const signForm = document.getElementById("sign-in-form");
   const signOutBtn = document.getElementById("sign-out-btn");
-  const signStatus = document.getElementById("sign-status");
-
-  if (signToggle && signPanel) {
-    signToggle.addEventListener("click", () => {
-      signPanel.style.display = signPanel.style.display === "none" ? "block" : "none";
-    });
-  }
-
-  if (signForm) {
-    signForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const ownerInput = document.getElementById("sign-owner-id");
-      const ownerId = Number(ownerInput?.value || 0);
-      if (!ownerId || ownerId < 1) {
-        if (signStatus) signStatus.textContent = "Enter a valid owner id.";
-        return;
-      }
-      // set current user locally (impersonate)
-      currentUser = { id: ownerId };
-      // propagate to Add Note owner field
-      const noteOwner = document.getElementById("note-owner");
-      if (noteOwner) {
-        noteOwner.value = ownerId;
-      }
-      if (signStatus) signStatus.textContent = `Signed in as user ${ownerId}`;
-      // show sign out button
-      if (signOutBtn) signOutBtn.style.display = "inline-block";
-      // hide submit button to avoid re-sign
-      const submitBtn = signForm.querySelector("button[type=submit]");
-      if (submitBtn) submitBtn.style.display = "none";
-    });
-  }
 
   if (signOutBtn) {
     signOutBtn.addEventListener("click", () => {
       currentUser = null;
-      const noteOwner = document.getElementById("note-owner");
-      if (noteOwner) noteOwner.value = "1";
-      if (signStatus) signStatus.textContent = "Signed out";
-      // reset form
-      const submitBtn = signForm.querySelector("button[type=submit]");
-      if (submitBtn) submitBtn.style.display = "inline-block";
-      signOutBtn.style.display = "none";
+      persistCurrentUser();
+      const appShell = document.getElementById("app-shell");
+      const authScreen = document.getElementById("auth-screen");
+      if (appShell) appShell.style.display = "none";
+      if (authScreen) authScreen.style.display = "flex";
+      const authStatus = document.getElementById("auth-status");
+      if (authStatus) authStatus.textContent = "Signed out.";
     });
   }
+
   const plainSearchInput = document.getElementById("plain-search");
   if (plainSearchInput) {
     plainSearchInput.addEventListener("input", (event) => {
@@ -945,9 +999,13 @@ function attachListeners() {
       const title = document.getElementById("note-title").value.trim();
       const content = document.getElementById("note-content").value.trim();
       const tag = document.getElementById("note-tag").value.trim();
-      const owner_id = Number(document.getElementById("note-owner").value);
+      const owner_id = currentUser?.id;
       if (!title || !content) {
         document.getElementById("form-error").textContent = "Title and content are required.";
+        return;
+      }
+      if (!owner_id) {
+        document.getElementById("form-error").textContent = "Please log in again to create a note.";
         return;
       }
       document.getElementById("form-error").textContent = "";
@@ -957,7 +1015,6 @@ function attachListeners() {
         updateTagFilterOptions();
         updateNotesDisplay();
         event.target.reset();
-        document.getElementById("note-owner").value = owner_id;
       } catch (err) {
         document.getElementById("form-error").textContent = err.message;
       }
@@ -991,14 +1048,8 @@ function attachListeners() {
   if (notesSortOrder) notesSortOrder.addEventListener("change", updateNotesDisplay);
   const resetButton = document.getElementById("reset-filters-btn");
   if (resetButton) resetButton.addEventListener("click", resetAllFilters);
-  const quickTagButtons = document.querySelectorAll(".quick-tag-btn");
-  quickTagButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      if (button.dataset.tag) {
-        toggleQuickTag(button.dataset.tag);
-      }
-    });
-  });
+  const quickTagSelect = document.getElementById("quick-tag-select");
+  if (quickTagSelect) quickTagSelect.addEventListener("change", syncQuickTagSelection);
   const quickIdFilter = document.getElementById("quick-id-filter");
   if (quickIdFilter) {
     quickIdFilter.addEventListener("input", updateNotesDisplay);
@@ -1030,21 +1081,19 @@ function attachListeners() {
     bulkImportForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const fileInput = document.getElementById("bulk-import-file");
-      const ownerInput = document.getElementById("bulk-owner-id");
       const status = document.getElementById("import-status");
-      if (!fileInput || !ownerInput || !status) return;
+      if (!fileInput || !status) return;
       if (!fileInput.files || fileInput.files.length === 0) {
         status.textContent = "Please choose a .txt file to upload.";
         return;
       }
-      const ownerId = Number(ownerInput.value);
-      if (!ownerId || ownerId < 1) {
-        status.textContent = "Enter a valid owner ID.";
+      if (!currentUser?.id) {
+        status.textContent = "Please log in again before importing notes.";
         return;
       }
       status.textContent = "Uploading file...";
       try {
-        await importNotes(ownerId, fileInput.files[0]);
+        await importNotes(currentUser.id, fileInput.files[0]);
         status.textContent = "Notes imported successfully.";
         await loadNotes();
         fileInput.value = "";
@@ -1055,10 +1104,135 @@ function attachListeners() {
   }
 }
 
+function setPasswordToggle(toggleButtonId, inputId) {
+  const toggleBtn = document.getElementById(toggleButtonId);
+  const input = document.getElementById(inputId);
+  if (!toggleBtn || !input) {
+    return;
+  }
+  toggleBtn.addEventListener("click", () => {
+    const nextType = input.type === "password" ? "text" : "password";
+    input.type = nextType;
+    toggleBtn.textContent = nextType === "password" ? "👁️" : "🙈";
+  });
+}
+
+function setupNavSectionHighlight() {
+  const sections = ["notes", "add-note", "category-tree", "quick-tags-panel"];
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) {
+          return;
+        }
+        const sectionId = entry.target.id;
+        document.querySelectorAll("#top-nav .nav-link").forEach((link) => {
+          const isActive = link.getAttribute("href") === `#${sectionId}`;
+          link.classList.toggle("active", isActive);
+        });
+      });
+    },
+    { threshold: 0.4 }
+  );
+
+  sections.forEach((id) => {
+    const section = document.getElementById(id);
+    if (section) {
+      observer.observe(section);
+    }
+  });
+}
+
+function initAuthUI() {
+  const showLoginBtn = document.getElementById("show-login-btn");
+  const showRegisterBtn = document.getElementById("show-register-btn");
+  const loginForm = document.getElementById("login-form");
+  const registerForm = document.getElementById("register-form");
+  const authStatus = document.getElementById("auth-status");
+  const appShell = document.getElementById("app-shell");
+  const authScreen = document.getElementById("auth-screen");
+  const signedUserLabel = document.getElementById("signed-user-label");
+
+  const showLogin = () => {
+    if (loginForm) loginForm.style.display = "block";
+    if (registerForm) registerForm.style.display = "none";
+    if (authStatus) authStatus.textContent = "";
+  };
+
+  const showRegister = () => {
+    if (loginForm) loginForm.style.display = "none";
+    if (registerForm) registerForm.style.display = "block";
+    if (authStatus) authStatus.textContent = "";
+  };
+
+  showLoginBtn?.addEventListener("click", showLogin);
+  showRegisterBtn?.addEventListener("click", showRegister);
+
+  loginForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const email = document.getElementById("login-email")?.value.trim();
+    const password = document.getElementById("login-password")?.value || "";
+    if (!email || !password) {
+      if (authStatus) authStatus.textContent = "Enter email and password.";
+      return;
+    }
+    try {
+      const user = await loginUser(email, password);
+      currentUser = user;
+      persistCurrentUser();
+      if (signedUserLabel) {
+        signedUserLabel.textContent = `Logged in as ${user.name} (ID ${user.id})`;
+      }
+      if (authScreen) authScreen.style.display = "none";
+      if (appShell) appShell.style.display = "block";
+      await loadNotes();
+      setupNavSectionHighlight();
+    } catch (err) {
+      if (authStatus) authStatus.textContent = err.message;
+    }
+  });
+
+  registerForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = document.getElementById("register-name")?.value.trim();
+    const email = document.getElementById("register-email")?.value.trim();
+    const password = document.getElementById("register-password")?.value || "";
+    if (!name || !email || !password) {
+      if (authStatus) authStatus.textContent = "Fill all fields to create account.";
+      return;
+    }
+    try {
+      await createAccount(name, email, password);
+      if (authStatus) authStatus.textContent = "Account created. Please login.";
+      showLogin();
+      const loginEmail = document.getElementById("login-email");
+      if (loginEmail) loginEmail.value = email;
+    } catch (err) {
+      if (authStatus) authStatus.textContent = err.message;
+    }
+  });
+
+  setPasswordToggle("toggle-login-password", "login-password");
+  setPasswordToggle("toggle-register-password", "register-password");
+}
+
 window.addEventListener("DOMContentLoaded", () => {
-  buildCategoryTree();
   attachListeners();
-  loadNotes();
+  initAuthUI();
+  currentUser = restoreCurrentUser();
+  if (currentUser) {
+    const appShell = document.getElementById("app-shell");
+    const authScreen = document.getElementById("auth-screen");
+    const signedUserLabel = document.getElementById("signed-user-label");
+    if (signedUserLabel) {
+      signedUserLabel.textContent = `Logged in as ${currentUser.name || "user"} (ID ${currentUser.id})`;
+    }
+    if (authScreen) authScreen.style.display = "none";
+    if (appShell) appShell.style.display = "block";
+    loadNotes();
+    setupNavSectionHighlight();
+  }
+  updateTagFilterOptions();
 });
 // State management
 let activeTagFilter = null;
