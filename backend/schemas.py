@@ -27,6 +27,17 @@ class UserOut(BaseModel):
     }
 
 
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=1)
+
+
+class LoginResponse(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+
+
 class NoteCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=120)
     content: str = Field(..., min_length=1)
@@ -47,6 +58,7 @@ class NoteOut(BaseModel):
     tag: str
     owner_id: int
     created_at: str
+    attachment_url: Optional[str] = None
 
     model_config = {
         "from_attributes": True,

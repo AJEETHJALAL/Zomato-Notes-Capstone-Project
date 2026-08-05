@@ -20,6 +20,15 @@ def get_user_by_email(db: Session, email: str) -> Optional[models.User]:
     return db.scalar(select(models.User).where(models.User.email == email))
 
 
+def authenticate_user(db: Session, email: str, password: str) -> Optional[models.User]:
+    user = get_user_by_email(db, email)
+    if user is None:
+        return None
+    if user.password != password:
+        return None
+    return user
+
+
 def create_note(db: Session, note: schemas.NoteCreate) -> models.Note:
     db_note = models.Note(
         title=note.title.strip(),

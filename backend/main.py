@@ -69,6 +69,13 @@ def simulate_indexing(note_id: int) -> None:
 
 
 def note_to_dict(note: models.Note) -> dict:
+    attachment_url = None
+    pattern = f"{note.id}_*"
+    candidates = list(UPLOADS_DIR.glob(pattern))
+    if candidates:
+        latest = max(candidates, key=lambda p: p.stat().st_mtime)
+        attachment_url = f"/attachments/{latest.name}"
+
     return {
         "id": note.id,
         "title": note.title,
@@ -76,6 +83,7 @@ def note_to_dict(note: models.Note) -> dict:
         "tag": note.tag or "",
         "owner_id": note.owner_id,
         "created_at": note.created_at.isoformat(),
+        "attachment_url": attachment_url,
     }
 
 
@@ -87,6 +95,14 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=400, detail="A user with that email already exists")
     return db_user
+
+
+@app.post("/auth/login", response_model=schemas.LoginResponse)
+def login_user(login: schemas.LoginRequest, db: Session = Depends(get_db)):
+    user = crud.authenticate_user(db, login.email, login.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    return {"id": user.id, "name": user.name, "email": user.email}
 
 
 @app.post("/notes", response_model=schemas.NoteCreateResponse)
@@ -124,10 +140,33 @@ def import_notes(owner_id: int, file: UploadFile = File(...), db: Session = Depe
     if owner is None:
         raise HTTPException(status_code=404, detail="Owner not found")
     contents = file.file.read().decode("utf-8")
-    lines = [line.strip() for line in contents.splitlines() if line.strip()]
-    created = []
+    lines = [line.strip() for line in contents.splitlines()]
+    blocks: list[list[str]] = []
+    current_block: list[str] = []
+
     for line in lines:
-        note_in = schemas.NoteCreate(title=line[:120], content=line, tag="", owner_id=owner_id)
+        if not line:
+            continue
+        if line == "---":
+            if current_block:
+                blocks.append(current_block)
+                current_block = []
+            continue
+        current_block.append(line)
+
+    if current_block:
+        blocks.append(current_block)
+
+    created = []
+    for block in blocks:
+        if len(block) < 3:
+            raise HTTPException(
+                status_code=400,
+                detail="Each note must include title, content, and tag on three lines separated by '---'",
+            )
+
+        title, content, tag = block[0], block[1], block[2]
+        note_in = schemas.NoteCreate(title=title[:120], content=content, tag=tag, owner_id=owner_id)
         note = crud.create_note(db, note_in)
         created.append(note_to_dict(note))
     return {"imported": len(created), "notes": created}
