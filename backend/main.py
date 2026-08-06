@@ -105,6 +105,20 @@ def login_user(login: schemas.LoginRequest, db: Session = Depends(get_db)):
     return {"id": user.id, "name": user.name, "email": user.email}
 
 
+@app.put("/users/{user_id}/email", response_model=schemas.LoginResponse)
+def update_user_email(user_id: int, payload: schemas.UserEmailUpdate, db: Session = Depends(get_db)):
+    user = crud.get_user(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    existing = crud.get_user_by_email(db, payload.email)
+    if existing and existing.id != user.id:
+        raise HTTPException(status_code=400, detail="A user with that email already exists")
+
+    updated = crud.update_user_email(db, user, payload.email)
+    return {"id": updated.id, "name": updated.name, "email": updated.email}
+
+
 @app.post("/notes", response_model=schemas.NoteCreateResponse)
 def create_note(
     note: schemas.NoteCreate,
@@ -286,3 +300,21 @@ async def upload_attachment(note_id: int, file: UploadFile = File(...), db: Sess
     # return URL to attachments mount
     url = f"/attachments/{dest_name}"
     return {"filename": dest_name, "url": url}
+
+
+@app.delete("/notes/{note_id:int}/attachment")
+def remove_attachment(note_id: int, db: Session = Depends(get_db)):
+    note = crud.get_note(db, note_id)
+    if note is None:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    pattern = f"{note_id}_*"
+    removed = 0
+    for file_path in UPLOADS_DIR.glob(pattern):
+        try:
+            file_path.unlink(missing_ok=True)
+            removed += 1
+        except OSError:
+            continue
+
+    return {"removed": removed}
