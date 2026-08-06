@@ -6,6 +6,37 @@ const TAG_ICON_MAP = {
   recipes: "🍽️",
   travel: "🧳",
   random: "🗒️",
+  study: "📚",
+  school: "🎓",
+  finance: "💰",
+  money: "💰",
+  shopping: "🛍️",
+  ideas: "💡",
+  family: "👪",
+  food: "🍲",
+  project: "🧩",
+};
+
+const CATEGORY_TREE = {
+  name: "All Tags",
+  children: [
+    { name: "Work", children: [
+      { name: "Standups", children: [] },
+      { name: "Retros", children: [] },
+      { name: "Project", children: [] },
+      { name: "Purchase", children: [] },
+    ]},
+    { name: "Personal", children: [
+      { name: "Health", children: [
+        { name: "Fitness", children: [] },
+        { name: "Play", children: [] },
+      ]},
+      { name: "Recipes", children: [] },
+      { name: "Service", children: [] },
+    ]},
+    { name: "Travel", children: [] },
+    { name: "Random", children: [] },
+  ],
 };
 
 const SYNONYM_MAP = {
@@ -21,6 +52,9 @@ let debounceTimer = null;
 let selectedQuickTags = new Set();
 let quickSpecialNotes = null;
 let currentUser = null; // { id: number }
+let currentNotesPage = 1;
+const NOTES_PER_PAGE = 8;
+const collapsedTreeNodes = new Set();
 
 function persistCurrentUser() {
   if (currentUser) {
@@ -40,7 +74,41 @@ function restoreCurrentUser() {
 }
 
 function getTagIcon(tag) {
-  return TAG_ICON_MAP[(tag || "").toLowerCase()] || "🏷️";
+  const normalizedTag = (tag || "").toLowerCase().trim();
+  if (!normalizedTag) {
+    return "🏷️";
+  }
+  if (TAG_ICON_MAP[normalizedTag]) {
+    return TAG_ICON_MAP[normalizedTag];
+  }
+  if (/work|project|task|meeting|office|job/.test(normalizedTag)) {
+    return "💼";
+  }
+  if (/health|fit|well|diet|exercise|medical|clinic/.test(normalizedTag)) {
+    return "🩺";
+  }
+  if (/recipe|cook|food|meal|kitchen|dish|bake|restaurant/.test(normalizedTag)) {
+    return "🍲";
+  }
+  if (/travel|trip|journey|flight|tour|vacation|holiday/.test(normalizedTag)) {
+    return "✈️";
+  }
+  if (/study|learn|school|class|exam|course|book/.test(normalizedTag)) {
+    return "📚";
+  }
+  if (/finance|money|bill|budget|pay|tax|invoice/.test(normalizedTag)) {
+    return "💰";
+  }
+  if (/family|home|parent|kid|friend/.test(normalizedTag)) {
+    return "👪";
+  }
+  if (/shop|buy|order|store|market/.test(normalizedTag)) {
+    return "🛍️";
+  }
+  if (/idea|brainstorm|plan|goal/.test(normalizedTag)) {
+    return "💡";
+  }
+  return "🏷️";
 }
 
 function absoluteAttachmentUrl(url) {
@@ -94,6 +162,19 @@ async function createAccount(name, email, password) {
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`Create account failed: ${response.status} ${text}`);
+  }
+  return response.json();
+}
+
+async function updateUserEmail(userId, email) {
+  const response = await fetch(`${BASE_API_URL}/users/${userId}/email`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Profile update failed: ${response.status} ${text}`);
   }
   return response.json();
 }
@@ -157,11 +238,20 @@ function renderNotes(notes) {
   list.innerHTML = "";
   if (notes.length === 0) {
     list.textContent = "No notes match your filter.";
+    renderPagination(0);
     return;
   }
-  notes.forEach((note) => {
+
+  const totalPages = Math.max(1, Math.ceil(notes.length / NOTES_PER_PAGE));
+  currentNotesPage = Math.min(Math.max(currentNotesPage, 1), totalPages);
+  const startIndex = (currentNotesPage - 1) * NOTES_PER_PAGE;
+  const pageNotes = notes.slice(startIndex, startIndex + NOTES_PER_PAGE);
+
+  pageNotes.forEach((note) => {
     list.appendChild(createNoteCard(note));
   });
+
+  renderPagination(notes.length);
 }
 
 function createNoteCard(note) {
@@ -181,32 +271,42 @@ function createNoteCard(note) {
   tagLine.innerHTML = `<span class="tag">Tag:</span> ${note.tag || "(none)"}`;
   card.appendChild(tagLine);
 
-  // show attachment preview/link if available
-  if (note.attachment_url) {
+  const attachmentBlock = document.createElement("div");
+  const attachmentPreview = document.createElement("img");
+  attachmentPreview.className = "attachment-preview";
+  const attachLink = document.createElement("a");
+  attachLink.className = "attachment-link";
+  attachLink.target = "_blank";
+  attachLink.rel = "noopener noreferrer";
+  attachLink.title = "View attachment";
+  attachLink.innerHTML = "📎 View attachment";
+  attachmentBlock.appendChild(attachmentPreview);
+  attachmentBlock.appendChild(attachLink);
+  card.appendChild(attachmentBlock);
+
+  const hiddenAttachInput = document.createElement("input");
+  hiddenAttachInput.type = "file";
+  hiddenAttachInput.accept = "image/*,application/pdf";
+  hiddenAttachInput.style.display = "none";
+  card.appendChild(hiddenAttachInput);
+
+  function refreshAttachmentView() {
+    if (!note.attachment_url) {
+      attachmentBlock.style.display = "none";
+      return;
+    }
     const attachmentUrl = absoluteAttachmentUrl(note.attachment_url);
     const isImage = /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(attachmentUrl);
-
-    if (isImage) {
-      const preview = document.createElement("img");
-      preview.src = attachmentUrl;
-      preview.alt = `Attachment preview for ${note.title}`;
-      preview.className = "attachment-preview";
-      card.appendChild(preview);
-    }
-
-    const attachLink = document.createElement("a");
     attachLink.href = attachmentUrl;
-    attachLink.target = "_blank";
-    attachLink.rel = "noopener noreferrer";
-    attachLink.className = "attachment-link";
-    attachLink.title = "View attachment";
-    attachLink.innerHTML = `📎 View attachment`;
-    card.appendChild(attachLink);
+    attachmentPreview.style.display = isImage ? "block" : "none";
+    if (isImage) {
+      attachmentPreview.src = attachmentUrl;
+      attachmentPreview.alt = `Attachment preview for ${note.title}`;
+    }
+    attachmentBlock.style.display = "block";
   }
 
-  const ownerInfo = document.createElement("p");
-  ownerInfo.textContent = `Owner ID: ${note.owner_id}`;
-  card.appendChild(ownerInfo);
+  refreshAttachmentView();
 
   const editFields = document.createElement("div");
   editFields.className = "edit-fields";
@@ -254,17 +354,32 @@ function createNoteCard(note) {
   const editButton = document.createElement("button");
   editButton.type = "button";
   editButton.textContent = "Edit";
+  editButton.className = "btn-indigo";
   const saveButton = document.createElement("button");
   saveButton.type = "button";
   saveButton.textContent = "Save";
+  saveButton.className = "btn-indigo";
   saveButton.style.display = "none";
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
   cancelButton.textContent = "Cancel";
+  cancelButton.className = "btn-indigo";
   cancelButton.style.display = "none";
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
   deleteButton.textContent = "Delete";
+
+  const addAttachmentBtn = document.createElement("button");
+  addAttachmentBtn.type = "button";
+  addAttachmentBtn.textContent = "Add attachment";
+  addAttachmentBtn.className = "btn-teal";
+  addAttachmentBtn.style.display = "none";
+
+  const removeAttachmentBtn = document.createElement("button");
+  removeAttachmentBtn.type = "button";
+  removeAttachmentBtn.textContent = "Remove attachment";
+  removeAttachmentBtn.className = "btn-amber";
+  removeAttachmentBtn.style.display = "none";
 
   const enterEditMode = () => {
     title.style.display = "none";
@@ -274,6 +389,8 @@ function createNoteCard(note) {
     editButton.style.display = "none";
     saveButton.style.display = "inline-block";
     cancelButton.style.display = "inline-block";
+    addAttachmentBtn.style.display = "inline-block";
+    removeAttachmentBtn.style.display = "inline-block";
   };
 
   const exitEditMode = () => {
@@ -284,6 +401,8 @@ function createNoteCard(note) {
     editButton.style.display = "inline-block";
     saveButton.style.display = "none";
     cancelButton.style.display = "none";
+    addAttachmentBtn.style.display = "none";
+    removeAttachmentBtn.style.display = "none";
   };
 
   editButton.addEventListener("click", () => {
@@ -325,6 +444,10 @@ function createNoteCard(note) {
   });
 
   deleteButton.addEventListener("click", async () => {
+    const shouldDelete = window.confirm("Are you sure you want to delete this note? This will remove it from the database.");
+    if (!shouldDelete) {
+      return;
+    }
     try {
       deleteButton.disabled = true;
       await deleteNote(note.id);
@@ -338,9 +461,49 @@ function createNoteCard(note) {
     }
   });
 
+  addAttachmentBtn.addEventListener("click", () => {
+    hiddenAttachInput.click();
+  });
+
+  hiddenAttachInput.addEventListener("change", async () => {
+    if (!hiddenAttachInput.files || hiddenAttachInput.files.length === 0) {
+      return;
+    }
+    try {
+      addAttachmentBtn.disabled = true;
+      const result = await uploadAttachment(note.id, hiddenAttachInput.files[0]);
+      note.attachment_url = result.url;
+      allNotes = allNotes.map((item) => (item.id === note.id ? { ...item, attachment_url: result.url } : item));
+      refreshAttachmentView();
+      hiddenAttachInput.value = "";
+      showToast("Attachment added");
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      addAttachmentBtn.disabled = false;
+    }
+  });
+
+  removeAttachmentBtn.addEventListener("click", async () => {
+    try {
+      removeAttachmentBtn.disabled = true;
+      await removeAttachment(note.id);
+      note.attachment_url = null;
+      allNotes = allNotes.map((item) => (item.id === note.id ? { ...item, attachment_url: null } : item));
+      refreshAttachmentView();
+      showToast("Attachment removed");
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      removeAttachmentBtn.disabled = false;
+    }
+  });
+
   controls.appendChild(editButton);
   controls.appendChild(saveButton);
   controls.appendChild(cancelButton);
+  controls.appendChild(addAttachmentBtn);
+  controls.appendChild(removeAttachmentBtn);
   controls.appendChild(deleteButton);
 
   if (note.ai_suggestion) {
@@ -412,6 +575,17 @@ async function uploadAttachment(noteId, file) {
   return response.json();
 }
 
+async function removeAttachment(noteId) {
+  const response = await fetch(`${BASE_API_URL}/notes/${noteId}/attachment`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Remove attachment failed: ${response.status} ${errText}`);
+  }
+  return response.json();
+}
+
 async function importNotes(ownerId, file) {
   const fd = new FormData();
   fd.append('file', file);
@@ -433,8 +607,27 @@ function showError(message) {
   }
 }
 
+function showToast(message) {
+  const toast = document.getElementById("toast");
+  if (!toast) {
+    return;
+  }
+  toast.textContent = message;
+  toast.classList.add("show");
+  window.setTimeout(() => {
+    toast.classList.remove("show");
+  }, 3000);
+}
+
 function clearError() {
   showError("");
+}
+
+function syncSignedUserLabel() {
+  const signedUserLabel = document.getElementById("signed-user-label");
+  if (signedUserLabel && currentUser) {
+    signedUserLabel.textContent = `Logged in as ${currentUser.name}`;
+  }
 }
 
 function setLoading(isLoading) {
@@ -552,13 +745,56 @@ function getDisplayedNotes() {
   return filtered;
 }
 
+function renderPagination(totalNotes) {
+  const pagination = document.getElementById("notes-pagination");
+  if (!pagination) {
+    return;
+  }
+
+  if (totalNotes === 0) {
+    pagination.innerHTML = "";
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(totalNotes / NOTES_PER_PAGE));
+  currentNotesPage = Math.min(Math.max(currentNotesPage, 1), totalPages);
+  const start = (currentNotesPage - 1) * NOTES_PER_PAGE + 1;
+  const end = Math.min(currentNotesPage * NOTES_PER_PAGE, totalNotes);
+
+  pagination.innerHTML = `
+    <button type="button" class="secondary small-button" data-page-action="prev" ${currentNotesPage === 1 ? "disabled" : ""}>Prev</button>
+    <span class="notes-pagination-label">Showing ${start}-${end} of ${totalNotes}</span>
+    <button type="button" class="secondary small-button" data-page-action="next" ${currentNotesPage === totalPages ? "disabled" : ""}>Next</button>
+  `;
+
+  pagination.querySelectorAll("button[data-page-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.pageAction;
+      if (action === "prev" && currentNotesPage > 1) {
+        currentNotesPage -= 1;
+      }
+      if (action === "next" && currentNotesPage < totalPages) {
+        currentNotesPage += 1;
+      }
+      renderNotes(getDisplayedNotes());
+    });
+  });
+}
+
 function updateNotesDisplay() {
+  currentNotesPage = 1;
   renderNotes(getDisplayedNotes());
 }
 
 function updateActiveTreeLabels() {
   document.querySelectorAll("#tree-root .tag-label").forEach((label) => {
-    if (activeTagFilter && label.dataset.tag?.toLowerCase() === activeTagFilter.toLowerCase()) {
+    const nodeTags = (label.dataset.nodeTags || "")
+      .split(",")
+      .map((tag) => tag.trim().toLowerCase())
+      .filter(Boolean);
+
+    const hasSelectedTag = nodeTags.some((tag) => selectedQuickTags.has(tag));
+    if (hasSelectedTag || (activeTagFilter && label.dataset.tag?.toLowerCase() === activeTagFilter.toLowerCase())) {
       label.classList.add("active-tag");
     } else {
       label.classList.remove("active-tag");
@@ -577,24 +813,148 @@ function getAllKnownTags() {
   return Array.from(tags).sort((a, b) => a.localeCompare(b));
 }
 
-function renderQuickTagSelect() {
-  const select = document.getElementById("quick-tag-select");
-  if (!select) {
+function updateQuickTagSearchInput() {
+  const quickTagSearch = document.getElementById("quick-tag-search");
+  if (!quickTagSearch) {
     return;
   }
 
-  const selectedBefore = new Set(Array.from(select.selectedOptions).map((option) => option.value.toLowerCase()));
-  select.innerHTML = "";
+  const selected = Array.from(selectedQuickTags);
+  quickTagSearch.value = selected.join(", ");
+}
 
-  getAllKnownTags().forEach((tag) => {
-    const option = document.createElement("option");
-    option.value = tag;
-    option.textContent = `${getTagIcon(tag)} ${tag}`;
-    if (selectedBefore.has(tag) || selectedQuickTags.has(tag)) {
-      option.selected = true;
-    }
-    select.appendChild(option);
+function renderQuickTagPills() {
+  const pillsContainer = document.getElementById("quick-tag-pills");
+  if (!pillsContainer) {
+    return;
+  }
+
+  pillsContainer.innerHTML = "";
+  Array.from(selectedQuickTags)
+    .sort((a, b) => a.localeCompare(b))
+    .forEach((tag) => {
+      const pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = "tag-pill";
+      pill.innerHTML = `${getTagIcon(tag)} ${tag} <span class="tag-pill-close" aria-hidden="true">&times;</span>`;
+      pill.setAttribute("aria-label", `Remove ${tag}`);
+      pill.addEventListener("click", () => {
+        selectedQuickTags.delete(tag);
+        updateQuickTagSearchInput();
+        renderQuickTagPills();
+        updateActiveTreeLabels();
+        updateNotesDisplay();
+      });
+      pillsContainer.appendChild(pill);
+    });
+}
+
+function collectNodeTags(node) {
+  const tags = [node.name.toLowerCase()];
+  (node.children || []).forEach((child) => {
+    collectNodeTags(child).forEach((tag) => tags.push(tag));
   });
+  return Array.from(new Set(tags));
+}
+
+function getNodePath(node, parentPath = "") {
+  const nodeSlug = node.name.toLowerCase().replace(/\s+/g, "-");
+  return parentPath ? `${parentPath}/${nodeSlug}` : nodeSlug;
+}
+
+function initializeCollapsedTree(node, parentPath = "") {
+  const nodePath = getNodePath(node, parentPath);
+  if (node.children && node.children.length > 0) {
+    collapsedTreeNodes.add(nodePath);
+    node.children.forEach((child) => initializeCollapsedTree(child, nodePath));
+  }
+}
+
+function toggleNodeTagSet(nodeTags) {
+  if (nodeTags.length === 0) {
+    return;
+  }
+
+  const allSelected = nodeTags.every((tag) => selectedQuickTags.has(tag));
+  if (allSelected) {
+    nodeTags.forEach((tag) => selectedQuickTags.delete(tag));
+  } else {
+    nodeTags.forEach((tag) => selectedQuickTags.add(tag));
+  }
+
+  const tagDropdown = document.getElementById("notes-tag-filter");
+  if (tagDropdown) {
+    tagDropdown.value = "";
+  }
+  activeTagFilter = null;
+  clearQuickSpecialMode();
+  updateQuickTagSearchInput();
+  renderQuickTagPills();
+  updateActiveTreeLabels();
+  updateNotesDisplay();
+}
+
+function renderTreeNode(node, parentPath = "") {
+  const li = document.createElement("li");
+  const nodePath = getNodePath(node, parentPath);
+  const nodeRow = document.createElement("div");
+  nodeRow.className = "tree-node-row";
+
+  if (node.children && node.children.length > 0) {
+    const toggleButton = document.createElement("button");
+    toggleButton.type = "button";
+    toggleButton.className = "tree-toggle";
+    const isCollapsed = collapsedTreeNodes.has(nodePath);
+    toggleButton.textContent = isCollapsed ? "▸" : "▾";
+    toggleButton.setAttribute("aria-label", `${isCollapsed ? "Expand" : "Collapse"} ${node.name}`);
+    toggleButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (collapsedTreeNodes.has(nodePath)) {
+        collapsedTreeNodes.delete(nodePath);
+      } else {
+        collapsedTreeNodes.add(nodePath);
+      }
+      buildCategoryTree();
+    });
+    nodeRow.appendChild(toggleButton);
+  } else {
+    const spacer = document.createElement("span");
+    spacer.className = "tree-toggle-spacer";
+    spacer.setAttribute("aria-hidden", "true");
+    nodeRow.appendChild(spacer);
+  }
+
+  const label = document.createElement("span");
+  label.textContent = `${getTagIcon(node.name)} ${node.name}`;
+  label.className = "tag-label";
+  label.dataset.tag = node.name;
+
+  const nodeTags = collectNodeTags(node).filter((tag) => tag !== "all tags");
+  label.dataset.nodeTags = nodeTags.join(",");
+
+  label.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (node.name === "All Tags") {
+      resetQuickFilters();
+      return;
+    }
+    toggleNodeTagSet(nodeTags);
+  });
+
+  nodeRow.appendChild(label);
+  li.appendChild(nodeRow);
+
+  if (node.children && node.children.length > 0) {
+    const childrenList = document.createElement("ul");
+    childrenList.className = "tag-tree-list";
+    childrenList.style.display = collapsedTreeNodes.has(nodePath) ? "none" : "block";
+    node.children.forEach((child) => {
+      childrenList.appendChild(renderTreeNode(child, nodePath));
+    });
+    li.appendChild(childrenList);
+  }
+
+  return li;
 }
 
 function updateTagFilterOptions() {
@@ -623,7 +983,8 @@ function updateTagFilterOptions() {
     select.value = currentValue;
   }
 
-  renderQuickTagSelect();
+  updateQuickTagSearchInput();
+  renderQuickTagPills();
   buildCategoryTree();
 }
 
@@ -664,43 +1025,6 @@ function filterNotes(value) {
   updateNotesDisplay();
 }
 
-function renderTreeLabel(name) {
-  const li = document.createElement("li");
-  const label = document.createElement("span");
-  label.textContent = `${getTagIcon(name)} ${name}`;
-  label.className = "tag-label";
-  label.dataset.tag = name;
-
-  if (activeTagFilter && name.toLowerCase() === activeTagFilter.toLowerCase()) {
-    label.classList.add("active-tag");
-  }
-
-  label.addEventListener("click", (event) => {
-    event.stopPropagation();
-
-    if (name === "All Tags") {
-      activeTagFilter = null;
-    } else if (activeTagFilter === name) {
-      activeTagFilter = null;
-    } else {
-      activeTagFilter = name;
-    }
-
-    const tagDropdown = document.getElementById("notes-tag-filter");
-    if (tagDropdown) {
-      tagDropdown.value = activeTagFilter || "";
-    }
-
-    clearQuickSelections();
-    clearQuickSpecialMode();
-    updateActiveTreeLabels();
-    updateNotesDisplay();
-  });
-
-  li.appendChild(label);
-  return li;
-}
-
 function buildCategoryTree() {
   const root = document.getElementById("tree-root");
   if (!root) {
@@ -709,13 +1033,10 @@ function buildCategoryTree() {
   root.innerHTML = "";
   const tree = document.createElement("ul");
   tree.className = "tag-tree-list";
-  tree.appendChild(renderTreeLabel("All Tags"));
-
-  getAllKnownTags().forEach((tag) => {
-    tree.appendChild(renderTreeLabel(tag));
-  });
+  tree.appendChild(renderTreeNode(CATEGORY_TREE, ""));
 
   root.appendChild(tree);
+  updateActiveTreeLabels();
 }
 
 async function performRankSearch() {
@@ -778,6 +1099,7 @@ async function performRankSearch() {
   }
 
   /* Render matched notes as cards in the notes list (same as filterNotes). */
+  currentNotesPage = 1;
   renderNotes(matchedNotes);
 
   /* Also show a text summary in the rank-results panel. */
@@ -832,6 +1154,7 @@ async function performLookup() {
   }
 
   /* Render the found note as a card in the notes list. */
+  currentNotesPage = 1;
   renderNotes([foundNote]);
 
   resultContainer.innerHTML = `<strong>Found:</strong> ${foundNote.title} <span class="tag">${foundNote.tag || "none"}</span>`;
@@ -848,24 +1171,9 @@ function clearQuickSpecialMode() {
 
 function clearQuickSelections() {
   selectedQuickTags.clear();
-  const quickTagSelect = document.getElementById("quick-tag-select");
-  if (quickTagSelect) {
-    Array.from(quickTagSelect.options).forEach((option) => {
-      option.selected = false;
-    });
-  }
-}
-
-function syncQuickTagSelection() {
-  clearQuickSpecialMode();
-  selectedQuickTags.clear();
-  const quickTagSelect = document.getElementById("quick-tag-select");
-  if (quickTagSelect) {
-    Array.from(quickTagSelect.selectedOptions).forEach((option) => {
-      selectedQuickTags.add(option.value.toLowerCase());
-    });
-  }
-  updateNotesDisplay();
+  updateQuickTagSearchInput();
+  renderQuickTagPills();
+  updateActiveTreeLabels();
 }
 
 async function performTagSummary() {
@@ -975,6 +1283,7 @@ function attachListeners() {
       if (authScreen) authScreen.style.display = "flex";
       const authStatus = document.getElementById("auth-status");
       if (authStatus) authStatus.textContent = "Signed out.";
+      showToast("Logged out successfully");
     });
   }
 
@@ -1027,7 +1336,7 @@ function attachListeners() {
   if (lookupBtn) lookupBtn.addEventListener("click", performLookup);
   const smartSearchInput = document.getElementById("smart-search-query");
   if (smartSearchInput) {
-    smartSearchInput.addEventListener("input", (event) => {
+    smartSearchInput.addEventListener("input", () => {
       if (debounceTimer) {
         clearTimeout(debounceTimer);
       }
@@ -1048,25 +1357,13 @@ function attachListeners() {
   if (notesSortOrder) notesSortOrder.addEventListener("change", updateNotesDisplay);
   const resetButton = document.getElementById("reset-filters-btn");
   if (resetButton) resetButton.addEventListener("click", resetAllFilters);
-  const quickTagSelect = document.getElementById("quick-tag-select");
-  if (quickTagSelect) quickTagSelect.addEventListener("change", syncQuickTagSelection);
   const quickIdFilter = document.getElementById("quick-id-filter");
   if (quickIdFilter) {
     quickIdFilter.addEventListener("input", updateNotesDisplay);
   }
-  const sortByDateBtn = document.getElementById("sort-by-date-btn");
-  if (sortByDateBtn) {
-    sortByDateBtn.addEventListener("click", () => {
-      const notesSort = document.getElementById("notes-sort-order");
-      if (notesSort) {
-        notesSort.value = "created_desc";
-      }
-      updateNotesDisplay();
-    });
-  }
-  const quickResetBtn = document.getElementById("quick-reset-filters-btn");
-  if (quickResetBtn) {
-    quickResetBtn.addEventListener("click", resetQuickFilters);
+  const quickClearBtn = document.getElementById("quick-clear-filters-btn");
+  if (quickClearBtn) {
+    quickClearBtn.addEventListener("click", resetQuickFilters);
   }
   const quickSummaryBtn = document.getElementById("quick-tag-summary-btn");
   if (quickSummaryBtn) {
@@ -1110,10 +1407,13 @@ function setPasswordToggle(toggleButtonId, inputId) {
   if (!toggleBtn || !input) {
     return;
   }
+  const icon = toggleBtn.querySelector(".material-symbols-outlined");
   toggleBtn.addEventListener("click", () => {
     const nextType = input.type === "password" ? "text" : "password";
     input.type = nextType;
-    toggleBtn.textContent = nextType === "password" ? "👁️" : "🙈";
+    if (icon) {
+      icon.textContent = nextType === "password" ? "visibility_off" : "visibility";
+    }
   });
 }
 
@@ -1152,17 +1452,48 @@ function initAuthUI() {
   const appShell = document.getElementById("app-shell");
   const authScreen = document.getElementById("auth-screen");
   const signedUserLabel = document.getElementById("signed-user-label");
+  const profileBtn = document.getElementById("profile-btn");
+  const profileModal = document.getElementById("profile-modal");
+  const profileCloseBtn = document.getElementById("profile-close-btn");
+  const profileSaveBtn = document.getElementById("profile-save-btn");
+  const profileName = document.getElementById("profile-name");
+  const profileEmail = document.getElementById("profile-email");
+  const profileStatus = document.getElementById("profile-status");
 
   const showLogin = () => {
     if (loginForm) loginForm.style.display = "block";
     if (registerForm) registerForm.style.display = "none";
     if (authStatus) authStatus.textContent = "";
+    showLoginBtn?.classList.add("active");
+    showRegisterBtn?.classList.remove("active");
+    showLoginBtn?.setAttribute("aria-selected", "true");
+    showRegisterBtn?.setAttribute("aria-selected", "false");
   };
 
   const showRegister = () => {
     if (loginForm) loginForm.style.display = "none";
     if (registerForm) registerForm.style.display = "block";
     if (authStatus) authStatus.textContent = "";
+    showRegisterBtn?.classList.add("active");
+    showLoginBtn?.classList.remove("active");
+    showRegisterBtn?.setAttribute("aria-selected", "true");
+    showLoginBtn?.setAttribute("aria-selected", "false");
+  };
+
+  const openProfileModal = () => {
+    if (!currentUser || !profileModal) {
+      return;
+    }
+    if (profileName) profileName.value = currentUser.name || "";
+    if (profileEmail) profileEmail.value = currentUser.email || "";
+    if (profileStatus) profileStatus.textContent = "";
+    profileModal.style.display = "flex";
+  };
+
+  const closeProfileModal = () => {
+    if (profileModal) {
+      profileModal.style.display = "none";
+    }
   };
 
   showLoginBtn?.addEventListener("click", showLogin);
@@ -1181,10 +1512,11 @@ function initAuthUI() {
       currentUser = user;
       persistCurrentUser();
       if (signedUserLabel) {
-        signedUserLabel.textContent = `Logged in as ${user.name} (ID ${user.id})`;
+        signedUserLabel.textContent = `Logged in as ${user.name}`;
       }
       if (authScreen) authScreen.style.display = "none";
       if (appShell) appShell.style.display = "block";
+      showToast("Logged in successfully");
       await loadNotes();
       setupNavSectionHighlight();
     } catch (err) {
@@ -1212,11 +1544,47 @@ function initAuthUI() {
     }
   });
 
+  profileBtn?.addEventListener("click", openProfileModal);
+  profileCloseBtn?.addEventListener("click", closeProfileModal);
+
+  profileModal?.addEventListener("click", (event) => {
+    if (event.target === profileModal) {
+      closeProfileModal();
+    }
+  });
+
+  profileSaveBtn?.addEventListener("click", async () => {
+    if (!currentUser || !profileEmail) {
+      return;
+    }
+    const nextEmail = profileEmail.value.trim();
+    if (!nextEmail) {
+      if (profileStatus) profileStatus.textContent = "Email is required.";
+      return;
+    }
+    try {
+      profileSaveBtn.disabled = true;
+      const updated = await updateUserEmail(currentUser.id, nextEmail);
+      currentUser = { ...currentUser, email: updated.email, name: updated.name };
+      persistCurrentUser();
+      syncSignedUserLabel();
+      if (profileStatus) profileStatus.textContent = "Email updated.";
+      showToast("Profile updated");
+    } catch (err) {
+      if (profileStatus) profileStatus.textContent = err.message;
+    } finally {
+      profileSaveBtn.disabled = false;
+    }
+  });
+
   setPasswordToggle("toggle-login-password", "login-password");
   setPasswordToggle("toggle-register-password", "register-password");
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  if (collapsedTreeNodes.size === 0) {
+    initializeCollapsedTree(CATEGORY_TREE);
+  }
   attachListeners();
   initAuthUI();
   currentUser = restoreCurrentUser();
@@ -1225,7 +1593,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const authScreen = document.getElementById("auth-screen");
     const signedUserLabel = document.getElementById("signed-user-label");
     if (signedUserLabel) {
-      signedUserLabel.textContent = `Logged in as ${currentUser.name || "user"} (ID ${currentUser.id})`;
+      signedUserLabel.textContent = `Logged in as ${currentUser.name || "user"}`;
     }
     if (authScreen) authScreen.style.display = "none";
     if (appShell) appShell.style.display = "block";

@@ -38,6 +38,10 @@ class LoginResponse(BaseModel):
     email: EmailStr
 
 
+class UserEmailUpdate(BaseModel):
+        email: EmailStr
+
+
 class NoteCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=120)
     content: str = Field(..., min_length=1)

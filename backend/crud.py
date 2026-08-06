@@ -20,6 +20,13 @@ def get_user_by_email(db: Session, email: str) -> Optional[models.User]:
     return db.scalar(select(models.User).where(models.User.email == email))
 
 
+def update_user_email(db: Session, user: models.User, email: str) -> models.User:
+    user.email = email.strip()
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def authenticate_user(db: Session, email: str, password: str) -> Optional[models.User]:
     user = get_user_by_email(db, email)
     if user is None:
