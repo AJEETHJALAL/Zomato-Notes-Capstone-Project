@@ -363,12 +363,12 @@ function createNoteCard(note) {
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
   cancelButton.textContent = "Cancel";
-  cancelButton.className = "btn-indigo";
   cancelButton.style.display = "none";
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
   deleteButton.textContent = "Delete";
-
+  deleteButton.className = "danger-btn";
+    
   const addAttachmentBtn = document.createElement("button");
   addAttachmentBtn.type = "button";
   addAttachmentBtn.textContent = "Add attachment";
@@ -1457,6 +1457,7 @@ function initAuthUI() {
   const profileCloseBtn = document.getElementById("profile-close-btn");
   const profileSaveBtn = document.getElementById("profile-save-btn");
   const profileName = document.getElementById("profile-name");
+  const profileId = document.getElementById("profile-id");
   const profileEmail = document.getElementById("profile-email");
   const profileStatus = document.getElementById("profile-status");
 
@@ -1484,6 +1485,7 @@ function initAuthUI() {
     if (!currentUser || !profileModal) {
       return;
     }
+    if (profileId) profileId.value = currentUser.id || "";
     if (profileName) profileName.value = currentUser.name || "";
     if (profileEmail) profileEmail.value = currentUser.email || "";
     if (profileStatus) profileStatus.textContent = "";
