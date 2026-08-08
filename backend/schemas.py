@@ -15,7 +15,6 @@ class UserCreate(BaseModel):
             raise ValueError("name must not be empty or whitespace")
         return value.strip()
 
-
 class UserOut(BaseModel):
     id: int
     name: str
@@ -26,21 +25,17 @@ class UserOut(BaseModel):
         "from_attributes": True,
     }
 
-
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=1)
-
 
 class LoginResponse(BaseModel):
     id: int
     name: str
     email: EmailStr
 
-
 class UserEmailUpdate(BaseModel):
         email: EmailStr
-
 
 class NoteCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=120)
@@ -48,12 +43,10 @@ class NoteCreate(BaseModel):
     tag: Optional[str] = Field(default="")
     owner_id: int
 
-
 class NoteUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=120)
     content: Optional[str] = Field(None, min_length=1)
     tag: Optional[str] = None
-
 
 class NoteOut(BaseModel):
     id: int
@@ -63,16 +56,15 @@ class NoteOut(BaseModel):
     owner_id: int
     created_at: str
     attachment_url: Optional[str] = None
-
+    source: str = "postgres"
+    
     model_config = {
         "from_attributes": True,
     }
 
-
 class AISuggestion(BaseModel):
     tags: List[str]
     summary: str
-
 
 class NoteCreateResponse(NoteOut):
     ai_suggestion: Optional[AISuggestion] = None
