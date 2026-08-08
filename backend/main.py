@@ -143,10 +143,28 @@ def create_note(
     return {**note_to_dict(db_note), "ai_suggestion": ai_suggestion}
 
 
-@app.get("/notes", response_model=List[schemas.NoteOut])
-def list_notes(tag: Optional[str] = None, db: Session = Depends(get_db)):
-    notes = crud.get_notes(db, tag=tag)
-    return [note_to_dict(note) for note in notes]
+@app.get("/notes")
+def list_notes(
+    tag: Optional[str] = None,
+    postgres_db: Session = Depends(get_db),
+    sqlite_db: Session = Depends(get_sqlite_db),
+):
+    postgres_notes = crud.get_notes(postgres_db, tag=tag)
+    sqlite_notes = crud.get_notes(sqlite_db, tag=tag)
+
+    notes = []
+
+    for note in postgres_notes:
+        item = note_to_dict(note)
+        item["source"] = "postgresql"
+        notes.append(item)
+
+    for note in sqlite_notes:
+        item = note_to_dict(note)
+        item["source"] = "sqlite"
+        notes.append(item)
+
+    return notes
 
 
 @app.post("/notes/import")
