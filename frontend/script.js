@@ -1,4 +1,4 @@
-const BASE_API_URL = "http://127.0.0.1:8000";
+const BASE_API_URL = "https://zomato-notes-capstone-project-production.up.railway.app";
 const DEFAULT_TAGS = ["work", "health", "recipes", "travel", "random"];
 const TAG_ICON_MAP = {
   work: "💼",
