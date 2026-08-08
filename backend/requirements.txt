@@ -6,3 +6,4 @@ python-dotenv==1.0.0
 httpx==0.28.0
 sentence-transformers==3.0.0
 python-multipart==0.0.6
+email-validator
