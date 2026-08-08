@@ -74,6 +74,9 @@ INFO:     Application startup complete
 
 The backend is now ready at `http://127.0.0.1:8000`.
 
+My back end is running in Railways for which i have provided the Link below:
+Back end Railway Link: https://zomato-notes-capstone-project-production.up.railway.app/notes
+
 ### Step 5: Serve the Frontend
 
 In a new terminal, navigate to the frontend directory:
@@ -152,6 +155,9 @@ python -m http.server 5500
 ```
 
 Then open `http://127.0.0.1:5500` in your browser.
+I have also published my website in the Vercel for which i have provided the Link below:
+Vercel Published Link: https://zomato-notes-capstone-project.vercel.app/
+
 
 ### Alternative: Live Server Extension (VS Code)
 
