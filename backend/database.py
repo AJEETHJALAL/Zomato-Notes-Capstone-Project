@@ -4,7 +4,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
-# Load .env locally
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -12,7 +11,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is not configured")
 
-# Railway/PostgreSQL sometimes provides postgres://
+# Railway may provide postgres://
 # SQLAlchemy expects postgresql://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace(
@@ -21,7 +20,6 @@ if DATABASE_URL.startswith("postgres://"):
         1
     )
 
-# PostgreSQL engine
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
