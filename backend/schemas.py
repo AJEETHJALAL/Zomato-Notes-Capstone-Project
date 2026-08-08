@@ -63,7 +63,8 @@ class NoteOut(BaseModel):
     owner_id: int
     created_at: str
     attachment_url: Optional[str] = None
-
+    source: str = "postgres"
+    
     model_config = {
         "from_attributes": True,
     }
