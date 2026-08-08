@@ -68,20 +68,13 @@ def simulate_indexing(note_id: int) -> None:
     time.sleep(2)
     logging.info(f"Indexed note {note_id} in background")
 
-def note_to_dict(
-    note: models.Note,
-    source: str = "postgres"
-) -> dict:
-    attachment_url = None
 
+def note_to_dict(note: models.Note) -> dict:
+    attachment_url = None
     pattern = f"{note.id}_*"
     candidates = list(UPLOADS_DIR.glob(pattern))
-
     if candidates:
-        latest = max(
-            candidates,
-            key=lambda p: p.stat().st_mtime
-        )
+        latest = max(candidates, key=lambda p: p.stat().st_mtime)
         attachment_url = f"/attachments/{latest.name}"
 
     return {
@@ -92,8 +85,8 @@ def note_to_dict(
         "owner_id": note.owner_id,
         "created_at": note.created_at.isoformat(),
         "attachment_url": attachment_url,
-        "source": source,
     }
+
 
 @app.post("/users", response_model=schemas.UserOut)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
@@ -104,12 +97,14 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="A user with that email already exists")
     return db_user
 
+
 @app.post("/auth/login", response_model=schemas.LoginResponse)
 def login_user(login: schemas.LoginRequest, db: Session = Depends(get_db)):
     user = crud.authenticate_user(db, login.email, login.password)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     return {"id": user.id, "name": user.name, "email": user.email}
+
 
 @app.put("/users/{user_id}/email", response_model=schemas.LoginResponse)
 def update_user_email(user_id: int, payload: schemas.UserEmailUpdate, db: Session = Depends(get_db)):
@@ -123,6 +118,7 @@ def update_user_email(user_id: int, payload: schemas.UserEmailUpdate, db: Sessio
 
     updated = crud.update_user_email(db, user, payload.email)
     return {"id": updated.id, "name": updated.name, "email": updated.email}
+
 
 @app.post("/notes", response_model=schemas.NoteCreateResponse)
 def create_note(
@@ -146,45 +142,12 @@ def create_note(
     background_tasks.add_task(simulate_indexing, db_note.id)
     return {**note_to_dict(db_note), "ai_suggestion": ai_suggestion}
 
+
 @app.get("/notes", response_model=List[schemas.NoteOut])
-def list_notes(
-    tag: Optional[str] = None,
-    postgres_db: Session = Depends(get_postgres_db),
-    sqlite_db: Session = Depends(get_sqlite_db),
-):
-    # Get notes from PostgreSQL
-    postgres_notes = crud.get_notes(
-        postgres_db,
-        tag=tag
-    )
+def list_notes(tag: Optional[str] = None, db: Session = Depends(get_db)):
+    notes = crud.get_notes(db, tag=tag)
+    return [note_to_dict(note) for note in notes]
 
-    # Get notes from SQLite
-    sqlite_notes = crud.get_notes(
-        sqlite_db,
-        tag=tag
-    )
-
-    # Convert both sets to dictionaries
-    postgres_data = [
-        note_to_dict(note)
-        for note in postgres_notes
-    ]
-
-    sqlite_data = [
-        note_to_dict(note)
-        for note in sqlite_notes
-    ]
-
-    # Combine both databases
-    all_notes = postgres_data + sqlite_data
-
-    # Optional: newest notes first
-    all_notes.sort(
-        key=lambda note: note["created_at"],
-        reverse=True
-    )
-
-    return all_notes
 
 @app.post("/notes/import")
 def import_notes(owner_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
