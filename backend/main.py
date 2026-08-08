@@ -209,13 +209,13 @@ def note_search(keyword: Optional[str] = None, sort_by: Optional[str] = None, db
         for note in notes:
             dt = datetime.fromisoformat(note["created_at"])
             note["created_at_epoch"] = int(dt.timestamp())
-        from .algorithms import insertion_sort_by_key
+        from algorithms import insertion_sort_by_key
         return insertion_sort_by_key(notes, key="created_at_epoch")[:5]
     if keyword:
         keyword_lower = keyword.lower()
         for note in notes:
             note["score"] = note["content"].lower().count(keyword_lower)
-        from .algorithms import insertion_sort_by_key
+        from algorithms import insertion_sort_by_key
         return insertion_sort_by_key(notes, key="score")[:5]
     raise HTTPException(status_code=400, detail="keyword or sort_by=date required")
 
@@ -224,7 +224,7 @@ def note_search(keyword: Optional[str] = None, sort_by: Optional[str] = None, db
 def lookup_note(title: str, algo: str = "iterative", db: Session = Depends(get_db)):
     notes = crud.get_notes_ordered_by_title(db)
     titles = [note.title for note in notes]
-    from .algorithms import binary_search_iterative, binary_search_recursive
+    from algorithms import binary_search_iterative, binary_search_recursive
     if algo == "iterative":
         index = binary_search_iterative(titles, title)
     else:
@@ -237,7 +237,7 @@ def lookup_note(title: str, algo: str = "iterative", db: Session = Depends(get_d
 @app.get("/notes/quick-find")
 def quick_find(tag: str, db: Session = Depends(get_db)):
     notes = [note_to_dict(note) for note in crud.get_notes(db)]
-    from .algorithms import linear_search
+    from algorithms import linear_search
     found = linear_search(notes, key="tag", value=tag)
     if not found:
         raise HTTPException(status_code=404, detail="Note not found")
