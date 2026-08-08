@@ -68,13 +68,22 @@ def simulate_indexing(note_id: int) -> None:
     time.sleep(2)
     logging.info(f"Indexed note {note_id} in background")
 
+def note_to_dict(
+    note: models.Note,
+    source: str = "postgres"
+) -> dict:
 
-def note_to_dict(note: models.Note) -> dict:
     attachment_url = None
+
     pattern = f"{note.id}_*"
     candidates = list(UPLOADS_DIR.glob(pattern))
+
     if candidates:
-        latest = max(candidates, key=lambda p: p.stat().st_mtime)
+        latest = max(
+            candidates,
+            key=lambda p: p.stat().st_mtime
+        )
+
         attachment_url = f"/attachments/{latest.name}"
 
     return {
@@ -85,9 +94,8 @@ def note_to_dict(note: models.Note) -> dict:
         "owner_id": note.owner_id,
         "created_at": note.created_at.isoformat(),
         "attachment_url": attachment_url,
+        "source": source,
     }
-
-
 @app.post("/users", response_model=schemas.UserOut)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     try:
@@ -142,30 +150,45 @@ def create_note(
     background_tasks.add_task(simulate_indexing, db_note.id)
     return {**note_to_dict(db_note), "ai_suggestion": ai_suggestion}
 
-
-@app.get("/notes")
+@app.get("/notes", response_model=List[schemas.NoteOut])
 def list_notes(
     tag: Optional[str] = None,
-    postgres_db: Session = Depends(get_db),
+    postgres_db: Session = Depends(get_postgres_db),
     sqlite_db: Session = Depends(get_sqlite_db),
 ):
-    postgres_notes = crud.get_notes(postgres_db, tag=tag)
-    sqlite_notes = crud.get_notes(sqlite_db, tag=tag)
+    # Get notes from PostgreSQL
+    postgres_notes = crud.get_notes(
+        postgres_db,
+        tag=tag
+    )
 
-    notes = []
+    # Get notes from SQLite
+    sqlite_notes = crud.get_notes(
+        sqlite_db,
+        tag=tag
+    )
 
-    for note in postgres_notes:
-        item = note_to_dict(note)
-        item["source"] = "postgresql"
-        notes.append(item)
+    # Convert both sets to dictionaries
+    postgres_data = [
+        note_to_dict(note)
+        for note in postgres_notes
+    ]
 
-    for note in sqlite_notes:
-        item = note_to_dict(note)
-        item["source"] = "sqlite"
-        notes.append(item)
+    sqlite_data = [
+        note_to_dict(note)
+        for note in sqlite_notes
+    ]
 
-    return notes
+    # Combine both databases
+    all_notes = postgres_data + sqlite_data
 
+    # Optional: newest notes first
+    all_notes.sort(
+        key=lambda note: note["created_at"],
+        reverse=True
+    )
+
+    return all_notes
 
 @app.post("/notes/import")
 def import_notes(owner_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
