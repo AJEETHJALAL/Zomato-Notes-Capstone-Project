@@ -72,7 +72,6 @@ def note_to_dict(
     note: models.Note,
     source: str = "postgres"
 ) -> dict:
-
     attachment_url = None
 
     pattern = f"{note.id}_*"
@@ -83,7 +82,6 @@ def note_to_dict(
             candidates,
             key=lambda p: p.stat().st_mtime
         )
-
         attachment_url = f"/attachments/{latest.name}"
 
     return {
@@ -96,6 +94,7 @@ def note_to_dict(
         "attachment_url": attachment_url,
         "source": source,
     }
+
 @app.post("/users", response_model=schemas.UserOut)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     try:
@@ -105,14 +104,12 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="A user with that email already exists")
     return db_user
 
-
 @app.post("/auth/login", response_model=schemas.LoginResponse)
 def login_user(login: schemas.LoginRequest, db: Session = Depends(get_db)):
     user = crud.authenticate_user(db, login.email, login.password)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     return {"id": user.id, "name": user.name, "email": user.email}
-
 
 @app.put("/users/{user_id}/email", response_model=schemas.LoginResponse)
 def update_user_email(user_id: int, payload: schemas.UserEmailUpdate, db: Session = Depends(get_db)):
@@ -126,7 +123,6 @@ def update_user_email(user_id: int, payload: schemas.UserEmailUpdate, db: Sessio
 
     updated = crud.update_user_email(db, user, payload.email)
     return {"id": updated.id, "name": updated.name, "email": updated.email}
-
 
 @app.post("/notes", response_model=schemas.NoteCreateResponse)
 def create_note(
