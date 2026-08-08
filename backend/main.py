@@ -26,6 +26,7 @@ Base.metadata.create_all(bind=engine)
 FRONTEND_ORIGINS = [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
+    "https://zomato-notes-capstone-project.vercel.app/",
 ]
 
 app = FastAPI(title="Zomato Notes API")
