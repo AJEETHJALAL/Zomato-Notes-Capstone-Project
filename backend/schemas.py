@@ -20,7 +20,7 @@ class UserOut(BaseModel):
     id: int
     name: str
     email: EmailStr
-    created_at: str
+    created_at: datetime
 
     model_config = {
         "from_attributes": True,
@@ -61,7 +61,7 @@ class NoteOut(BaseModel):
     content: str
     tag: str
     owner_id: int
-    created_at: str
+    created_at: datetime
     attachment_url: Optional[str] = None
 
     model_config = {
