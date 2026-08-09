@@ -23,11 +23,22 @@ load_dotenv(BASE_DIR / ".env")
 # ============================================================
 # SQLite database
 # ============================================================
+#
+# Railway:
+#   /data/notes.db
+#
+# Local:
+#   ./notes.db
+#
+# ============================================================
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    f"sqlite:///{BASE_DIR / 'notes.db'}"
-)
+if os.getenv("RAILWAY_ENVIRONMENT"):
+    DATABASE_URL = "sqlite:////data/notes.db"
+else:
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL",
+        f"sqlite:///{BASE_DIR / 'notes.db'}"
+    )
 
 
 # ============================================================
