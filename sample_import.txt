@@ -1,7 +1,19 @@
-Batmitton match
-I have a batmitton match by 4 pm
+Badminton match
+I have a badminton match by 4 pm
 Play
 ---
-Book Taxi
-Book taxi for 2 persons from Airport to hotel
-Travel
+Gym Membership
+Renew Gym membership, membership gets expired in a week
+Fitness
+---
+Capstone project-Zomato Notes
+I have successfully completed the Capstone project-Zomato Notes
+Project
+---
+Printer Purchase
+Create a Purchase Order for buying a replacement printer
+Purchase
+---
+Mock Test
+Attend the offline exam mock test practice for the final examination
+Project
