@@ -87,16 +87,29 @@ def note_to_dict(note: models.Note) -> dict:
         "attachment_url": attachment_url,
     }
 
-
 @app.post("/users", response_model=schemas.UserOut)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     try:
         db_user = crud.create_user(db, user)
+        
+        return { 
+            "id": db_user.id,
+            "name": db_user.name,
+            "email": db_user.email,
+            "created_at": db_user.created_at.isoformat(),
+        }
+        
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="A user with that email already exists")
-    return db_user
-
+        
+    except Exception as exc:
+        db.rollback()
+        logging.exception("User creation failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to create user"
+        )
 
 @app.post("/auth/login", response_model=schemas.LoginResponse)
 def login_user(login: schemas.LoginRequest, db: Session = Depends(get_db)):
