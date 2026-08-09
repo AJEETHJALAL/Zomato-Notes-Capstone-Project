@@ -1,6 +1,26 @@
 # Zomato Notes — Full Stack Capstone Project
 
+Hello!!!I have created Zomato Notes - capstone project. I'm sharing the Link of the GitHub Repository which is public.
+
+Link for GitHub: https://github.com/AJEETHJALAL/Zomato-Notes-Capstone-Project.git
+
+I have also published my website in the Vercel for which i have provided the Link below:
+
+Vercel Published Link: https://zomato-notes-capstone-project.vercel.app/
+
+Use the following Login ID's and password:
+User ID#1 Login ID: alice@example.com Password: alicepass123
+User ID#2 Login ID: bob@example.com Password: bobpass123
+User ID#3 Login ID: ajeethpasha@gmail.com Password: Ajp@123456
+
+My back end is running in Railways for which i have provided the Link below:
+Back end Railway Link: https://zomato-notes-capstone-project-production.up.railway.app/notes/
+
+APIs: https://zomato-notes-capstone-project-production.up.railway.app/docs#/
+
+
 A production-ready internal knowledge base for incident notes with real backend, frontend, ranking algorithms, and AI-powered semantic search. This document covers setup, backend/frontend execution, CORS configuration, end-to-end integration proof, and detailed examples of every feature with actual API requests and responses.
+
 
 ---
 
